@@ -1,4 +1,4 @@
-const CACHE_NAME = "rumah-mapan-pwa-v1";
+const CACHE_NAME = "rumah-mapan-pwa-v2";
 const OFFLINE_URL = "/offline.html";
 const PRECACHE_URLS = [
   OFFLINE_URL,
@@ -35,7 +35,29 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
 
-  if (url.pathname === "/offline-content" || url.pathname === "/ikon-rumah-mapan.svg" || url.pathname === "/manifest.webmanifest") {
+  if (url.pathname === "/offline-content") {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(request);
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
+            await cache.put(request, response.clone());
+            return response;
+          }
+          return cached ?? response;
+        } catch {
+          return cached ?? new Response("Konten luring belum tersedia.", {
+            status: 503,
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          });
+        }
+      }),
+    );
+    return;
+  }
+
+  if (url.pathname === "/ikon-rumah-mapan.svg" || url.pathname === "/manifest.webmanifest") {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cached = await cache.match(request);

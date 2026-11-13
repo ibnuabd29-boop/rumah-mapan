@@ -16,12 +16,12 @@ export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">
 
   const { data: t } = await supabase
     .from("tantangan")
-    .select("slug, kategori, judul, isi, menit, poin, peringatan")
+    .select("slug, kategori, judul, isi, menit, poin, peringatan, aktif")
     .eq("slug", slug)
     .maybeSingle();
   if (!t) notFound();
 
-  const [{ data: ada }, { data: drive }] = await Promise.all([
+  const [{ data: ada }, { data: drive }, { data: tugasHariIni, error: tugasError }] = await Promise.all([
     supabase
       .from("bukti")
       .select("status, alasan")
@@ -31,7 +31,15 @@ export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">
       .order("dibuat_at", { ascending: false })
       .limit(1),
     supabase.rpc("status_drive", { p_keluarga: rumah.id }),
+    t.aktif
+      ? Promise.resolve({ data: null, error: null })
+      : supabase.from("tantangan_harian").select("tantangan_slug")
+          .eq("keluarga_id", rumah.id).eq("tanggal", hariIniWib()).eq("tantangan_slug", slug).maybeSingle(),
   ]);
+  if (tugasError) {
+    return <p role="alert" className="border border-bahaya p-3 text-bahaya">Status tantangan belum bisa diperiksa. Muat ulang halaman.</p>;
+  }
+  const bolehKirim = t.aktif || Boolean(tugasHariIni);
   const terakhir = ada?.[0];
   const aktif = terakhir && terakhir.status !== "ditolak";
 
@@ -65,7 +73,11 @@ export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">
             <strong>Bukti sebelumnya ditolak.</strong> {terakhir.alasan ? `Alasan: ${terakhir.alasan}` : ""} Kirim bukti baru di bawah.
           </p>
         ) : null}
-        {aktif ? (
+        {!bolehKirim ? (
+          <p role="note" className="rounded-lg border border-kayu px-3 py-2">
+            Tantangan ini sudah diarsipkan dan tidak menerima bukti baru.
+          </p>
+        ) : aktif ? (
           <p role="status" className="rounded-lg border border-primary px-3 py-2">
             {terakhir.status === "menunggu" ? (
               <>

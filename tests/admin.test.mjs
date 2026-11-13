@@ -16,7 +16,10 @@ await db.exec(`
   grant usage on schema public to authenticated, anon;
   alter default privileges in schema public grant all on tables to anon, authenticated;
 `);
-for (const f of ["0001_akun_keluarga", "0002_tantangan_bukti", "0003_isi_tantangan", "0004_admin"]) {
+for (const f of [
+  "0001_akun_keluarga", "0002_tantangan_bukti", "0003_isi_tantangan",
+  "0004_admin", "0007_konten_admin",
+]) {
   await db.exec(readFileSync(`supabase/migrations/${f}.sql`, "utf8"));
 }
 
@@ -190,4 +193,95 @@ test("ringkasan_keluarga untuk anggota tetap bekerja dan orang luar tetap ditola
   assert.equal((await as(ayah, `select ringkasan_keluarga('${kid}') as r`)).rows[0].r.selesai >= 1, true);
   await assert.rejects(as(ayah2, `select ringkasan_keluarga('${kid}')`), /bukan_anggota/);
   await assert.rejects(as(admin, `select ringkasan_keluarga('${kid}')`), /bukan_anggota/);
+});
+
+test("admin mengelola tantangan sambil menjaga tugas dan poin historis", async () => {
+  await db.exec(`update tantangan set aktif = false where kategori = 'ke_tempat_kerja'`);
+  const buatTantangan = async (slug, judul) => as(admin, `
+    select admin_simpan_tantangan($1, 'ke_tempat_kerja', $2, 'Ajak anak mengamati kegiatan bersama.', 10, 10, null) as slug
+  `, [slug, judul]);
+  await buatTantangan("uji-tantangan-satu", "Tantangan uji satu");
+  await buatTantangan("uji-tantangan-dua", "Tantangan uji dua");
+
+  const pilihan = (await as(ayah2, `select atur_tantangan_hari_ini($1,'hari_kunjungan',false) as slug`, [kid2])).rows[0].slug;
+  const berikut = pilihan === "uji-tantangan-satu" ? "uji-tantangan-dua" : "uji-tantangan-satu";
+  await as(admin, `select admin_status_tantangan($1,false)`, [pilihan]);
+  assert.equal(
+    (await as(ayah2, `select atur_tantangan_hari_ini($1,'hari_kunjungan',false) as slug`, [kid2])).rows[0].slug,
+    pilihan,
+    "tantangan yang sudah dipilih hari ini tetap berlaku setelah diarsipkan",
+  );
+
+  const buktiArsip = (await as(ayah2, `
+    select kirim_bukti($1,$2,'cerita',$3,$4,null) as id
+  `, [kid2, pilihan, CERITA, h("f")])).rows[0].id;
+  await as(ayah2, `select hapus_bukti($1)`, [buktiArsip]);
+  assert.equal(
+    (await as(ayah2, `select atur_tantangan_hari_ini($1,'hari_kunjungan',true) as slug`, [kid2])).rows[0].slug,
+    berikut,
+    "tantangan arsip tidak dipilih ulang",
+  );
+  await assert.rejects(
+    as(admin, `select admin_status_tantangan($1,false)`, [berikut]),
+    /tantangan_terakhir_kategori/,
+  );
+
+  const buktiAktif = (await as(ayah2, `
+    select kirim_bukti($1,$2,'cerita',$3,$4,null) as id
+  `, [kid2, berikut, CERITA + " versi aktif", h("g")])).rows[0].id;
+  await as(admin, `select admin_tinjau_bukti($1,'disetujui',null)`, [buktiAktif]);
+  await assert.rejects(
+    as(admin, `
+      select admin_simpan_tantangan($1,'ke_tempat_kerja','Judul berubah','Ajak anak mengamati kegiatan bersama.',10,15,null)
+    `, [berikut]),
+    /poin_tidak_boleh_diubah/,
+  );
+  await assert.rejects(
+    as(admin, `
+      select admin_simpan_tantangan($1,'komunikasi','Judul berubah','Ajak anak mengamati kegiatan bersama.',10,10,null)
+    `, [berikut]),
+    /kategori_tidak_boleh_diubah/,
+  );
+  await assert.rejects(
+    as(ayah, `select admin_daftar_konten()`),
+    /bukan_admin/,
+  );
+
+  const konten = (await as(admin, `select admin_daftar_konten() as k`)).rows[0].k;
+  const itemArsip = konten.tantangan.find((item) => item.slug === pilihan);
+  const itemBerpoin = konten.tantangan.find((item) => item.slug === berikut);
+  assert.equal(itemArsip.aktif, false);
+  assert.equal(itemBerpoin.poin_terkunci, true);
+});
+
+test("admin mengelola pertanyaan; arsip tetap tersimpan dan tidak tampak bagi pengguna", async () => {
+  const id = (await as(admin, `
+    select admin_simpan_pertanyaan(null,'obrolan','hati','Pertanyaan tambahan untuk keluarga') as id
+  `)).rows[0].id;
+  assert.equal(
+    (await as(ayah, `select teks from pertanyaan_konten where id = $1`, [id])).rows[0].teks,
+    "Pertanyaan tambahan untuk keluarga",
+  );
+  await assert.rejects(
+    as(ayah, `select admin_simpan_pertanyaan(null,'obrolan','hati','Pertanyaan tidak sah')`),
+    /bukan_admin/,
+  );
+  await assert.rejects(
+    as(ayah, `insert into pertanyaan_konten (jenis, kelompok, teks) values ('obrolan','hati','Tidak boleh langsung')`),
+  );
+
+  await as(admin, `select admin_status_pertanyaan($1,false)`, [id]);
+  assert.equal((await as(ayah, `select * from pertanyaan_konten where id = $1`, [id])).rows.length, 0);
+  const archived = (await db.query(`select aktif, teks from pertanyaan_konten where id = '${id}'`)).rows[0];
+  assert.equal(archived.aktif, false);
+  assert.equal(archived.teks, "Pertanyaan tambahan untuk keluarga");
+  await as(admin, `select admin_status_pertanyaan($1,true)`, [id]);
+  assert.equal((await as(ayah, `select * from pertanyaan_konten where id = $1`, [id])).rows.length, 1);
+  await db.exec(`set role anon`);
+  try {
+    assert.equal((await db.query(`select * from kelompok_pertanyaan`)).rows.length, 12);
+    assert.ok((await db.query(`select * from pertanyaan_konten where aktif`)).rows.length >= 29);
+  } finally {
+    await db.exec(`reset role`);
+  }
 });

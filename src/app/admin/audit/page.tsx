@@ -15,6 +15,13 @@ const LABEL: Record<string, string> = {
   tinjau_bukti: "Mengubah status bukti",
   ekspor_csv: "Mengunduh CSV progres",
   lihat_audit: "Membuka log audit",
+  lihat_konten: "Melihat daftar konten",
+  simpan_tantangan: "Menyimpan tantangan",
+  arsipkan_tantangan: "Mengarsipkan tantangan",
+  aktifkan_tantangan: "Mengaktifkan tantangan",
+  simpan_pertanyaan: "Menyimpan pertanyaan",
+  arsipkan_pertanyaan: "Mengarsipkan pertanyaan",
+  aktifkan_pertanyaan: "Mengaktifkan pertanyaan",
 };
 
 export default async function Halaman() {

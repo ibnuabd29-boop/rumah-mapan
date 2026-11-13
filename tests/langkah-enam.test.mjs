@@ -18,7 +18,7 @@ await db.exec(`
 `);
 for (const migration of [
   "0001_akun_keluarga", "0002_tantangan_bukti", "0003_isi_tantangan",
-  "0004_admin", "0005_perasaan_catatan_masa_depan",
+  "0004_admin", "0005_perasaan_catatan_masa_depan", "0007_konten_admin",
 ]) {
   await db.exec(readFileSync(`supabase/migrations/${migration}.sql`, "utf8"));
 }

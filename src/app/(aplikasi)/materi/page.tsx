@@ -31,7 +31,22 @@ export default async function Halaman() {
   if (error) {
     return <p role="alert" className="border border-bahaya p-3 text-bahaya">Progres bacaan belum bisa dimuat. Muat ulang halaman.</p>;
   }
+  const { data: daftarPertanyaan, error: pertanyaanError } = await supabase
+    .from("pertanyaan_konten")
+    .select("kelompok, teks")
+    .eq("jenis", "materi_genre")
+    .eq("aktif", true)
+    .order("dibuat_at");
+  if (pertanyaanError) {
+    return <p role="alert" className="border border-bahaya p-3 text-bahaya">Pertanyaan diskusi belum bisa dimuat. Muat ulang halaman.</p>;
+  }
   const dibaca = new Set((selesai ?? []).map((baris) => baris.materi_slug));
+  const pertanyaanPerMateri = new Map<string, string[]>();
+  for (const pertanyaan of daftarPertanyaan ?? []) {
+    const daftar = pertanyaanPerMateri.get(pertanyaan.kelompok) ?? [];
+    daftar.push(pertanyaan.teks);
+    pertanyaanPerMateri.set(pertanyaan.kelompok, daftar);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -83,7 +98,18 @@ export default async function Halaman() {
                     <h2 id={`ortu-${materi.slug}`} className="font-semibold">Bacaan orang tua</h2>
                     <p>{materi.orangTua}</p>
                   </section>
-                  <p><strong>Pertanyaan diskusi:</strong> {materi.tanya}</p>
+                  <section aria-label={`Pertanyaan diskusi, ${materi.judul}`} className="flex flex-col gap-1">
+                    <h3 className="font-semibold">Pertanyaan diskusi</h3>
+                    {pertanyaanPerMateri.get(materi.slug)?.length ? (
+                      <ul className="list-inside list-disc">
+                        {pertanyaanPerMateri.get(materi.slug)?.map((pertanyaan) => (
+                          <li key={pertanyaan}>{pertanyaan}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted">Belum ada pertanyaan diskusi untuk materi ini.</p>
+                    )}
+                  </section>
                   <FormTandaiMateri slug={materi.slug} sudahDibaca={sudahDibaca} />
                 </div>
               </details>

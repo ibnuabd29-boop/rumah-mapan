@@ -10,6 +10,8 @@ const GALAT: Record<string, string> = {
   alasan_wajib: "Tulis alasan penolakan, minimal 3 huruf, supaya pengirim tahu apa yang perlu diperbaiki.",
   tidak_berhak: "Hanya pengirim atau pemilik rumah yang bisa menghapus bukti.",
   bukti_tidak_ada: "Bukti tidak ditemukan.",
+  tantangan_diarsipkan: "Tantangan ini sudah diarsipkan dan tidak menerima bukti baru.",
+  tantangan_tidak_tersedia: "Belum ada tantangan aktif untuk situasi ini. Hubungi admin platform.",
 };
 
 export function galatTantangan(pesan: string) {

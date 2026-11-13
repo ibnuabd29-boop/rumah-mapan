@@ -11,7 +11,8 @@ export default async function Halaman({ searchParams }: PageProps<"/tantangan">)
   const kategori = typeof sp.k === "string" && KATEGORI.some((x) => x.nilai === sp.k) ? sp.k : null;
   const { supabase, rumah } = await ambilSesi();
 
-  let q = supabase.from("tantangan").select("slug, kategori, judul, isi, menit, poin").order("kategori").order("judul");
+  let q = supabase.from("tantangan").select("slug, kategori, judul, isi, menit, poin")
+    .eq("aktif", true).order("kategori").order("judul");
   if (kategori) q = q.eq("kategori", kategori);
   const [{ data: daftar, error }, { data: hariIni }] = await Promise.all([
     q,
