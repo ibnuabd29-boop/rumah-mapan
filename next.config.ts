@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-const dev = process.env.NODE_ENV !== "production";
-
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -14,20 +12,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // Semua halaman bergantung pada sesi pengguna, jadi tidak ada yang bisa di-prerender.
-  // Turbopack hanya aktif di dev; production build memakai webpack standar.
-  ...(dev
-    ? {
-        turbopack: {
-          rules: {
-            "*.css": {
-              loaders: ["@tailwindcss/turbopack"],
-              as: "*.css",
-            },
-          },
-        },
-      }
-    : {}),
 };
 
 export default nextConfig;
