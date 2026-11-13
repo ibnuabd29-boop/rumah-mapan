@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f1e7">
+    <title>Bacaan luring | Rumah Mapan</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f1e7;
+        --surface: #fffdf8;
+        --ink: #1c2623;
+        --muted: #4f5b56;
+        --line: #d9d0bf;
+        --primary: #1f4d45;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #141b19;
+          --surface: #1c2623;
+          --ink: #ede8dc;
+          --muted: #a9b3ad;
+          --line: #33403b;
+          --primary: #6fb3a4;
+        }
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 1rem/1.6 system-ui, sans-serif;
+      }
+      header, main { width: min(100% - 2rem, 44rem); margin-inline: auto; }
+      header { padding-block: 1.25rem 0.5rem; }
+      main { padding-block: 0.5rem 3rem; }
+      h1, h2, h3 { line-height: 1.25; }
+      h1 { margin-block: 0.5rem; font-family: Georgia, serif; font-size: clamp(1.7rem, 5vw, 2.2rem); }
+      h2 { margin-block: 1.5rem 0.5rem; font-family: Georgia, serif; }
+      h3 { margin-block: 0.6rem; font-size: 1.05rem; }
+      p { overflow-wrap: anywhere; }
+      a { color: var(--primary); }
+      a:focus-visible, summary:focus-visible {
+        outline: 3px solid var(--primary);
+        outline-offset: 3px;
+      }
+      .wordmark { color: var(--primary); font: 600 1.2rem Georgia, serif; }
+      .note, .state {
+        margin-block: 1rem;
+        padding: 0.85rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        background: var(--surface);
+      }
+      .list { margin: 0; padding: 0; list-style: none; border-block: 1px solid var(--line); }
+      .list li { padding: 0.75rem 0; border-bottom: 1px solid var(--line); }
+      .list li:last-child { border-bottom: 0; }
+      details > summary { min-height: 2.75rem; cursor: pointer; font-weight: 650; }
+      details > summary::marker { color: var(--primary); }
+      .muted { color: var(--muted); font-size: 0.9rem; }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="wordmark" href="/" aria-label="Rumah Mapan, buka aplikasi">Rumah Mapan</a>
+    </header>
+    <main>
+      <h1>Bacaan yang tersimpan</h1>
+      <p class="muted">Rumah mempersiapkan masa yang akan datang</p>
+      <p class="note">Anda sedang luring. Materi dan kartu di halaman ini tersimpan untuk dibaca. Catatan, progres, dan data keluarga tidak disimpan untuk akses luring.</p>
+      <p id="status" class="state" role="status" aria-live="polite">Memuat bacaan luring...</p>
+      <section id="materi" aria-labelledby="judul-materi">
+        <h2 id="judul-materi">Materi keluarga</h2>
+        <ol id="daftar-materi" class="list"></ol>
+      </section>
+      <section id="obrolan" aria-labelledby="judul-obrolan">
+        <h2 id="judul-obrolan">Kartu obrolan</h2>
+        <div id="daftar-obrolan"></div>
+      </section>
+      <p><a href="/">Saat tersambung, buka aplikasi Rumah Mapan</a></p>
+    </main>
+    <script>
+      const status = document.querySelector("#status");
+      const daftarMateri = document.querySelector("#daftar-materi");
+      const daftarObrolan = document.querySelector("#daftar-obrolan");
+      const buat = (tag, teks) => {
+        const elemen = document.createElement(tag);
+        elemen.textContent = teks;
+        return elemen;
+      };
+
+      fetch("/offline-content")
+        .then((response) => {
+          if (!response.ok) throw new Error("Konten luring tidak tersedia.");
+          return response.json();
+        })
+        .then(({ materi, obrolan }) => {
+          for (const item of materi) {
+            const detail = document.createElement("details");
+            const ringkas = buat("summary", item.judul);
+            const isi = document.createElement("div");
+            const li = document.createElement("li");
+            isi.append(
+              buat("h3", "Bacaan anak"),
+              buat("p", item.anak),
+              buat("h3", "Bacaan orang tua"),
+              buat("p", item.orangTua),
+              buat("p", `Pertanyaan diskusi: ${item.tanya}`),
+            );
+            detail.append(ringkas, isi);
+            li.append(detail);
+            daftarMateri.append(li);
+          }
+
+          for (const bagian of obrolan) {
+            const section = document.createElement("section");
+            section.append(buat("h3", bagian.tema));
+            const daftar = document.createElement("ol");
+            daftar.className = "list";
+            for (const pertanyaan of bagian.kartu) {
+              const li = document.createElement("li");
+              li.append(buat("p", pertanyaan));
+              daftar.append(li);
+            }
+            section.append(daftar);
+            daftarObrolan.append(section);
+          }
+          status.textContent = "Bacaan materi dan kartu obrolan siap dibaca.";
+        })
+        .catch(() => {
+          status.textContent = "Bacaan luring belum tersedia di perangkat ini. Sambungkan ke internet lalu buka kembali aplikasi.";
+        });
+    </script>
+  </body>
+</html>
