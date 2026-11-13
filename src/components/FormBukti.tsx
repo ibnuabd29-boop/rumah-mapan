@@ -13,12 +13,10 @@ const hurufSaja = (t: string) => t.replace(/[^\p{L}]/gu, "").length;
 type Props = {
   keluargaId: string;
   slug: string;
-  statusDrive: "tersambung" | "terputus" | "belum";
-  pemilik: boolean;
-  driveSiap: boolean;
+  statusDrive: "tersambung" | "terputus" | "belum" | "galat";
 };
 
-export function FormBukti({ keluargaId, slug, statusDrive, pemilik, driveSiap }: Props) {
+export function FormBukti({ keluargaId, slug, statusDrive }: Props) {
   const [jenis, setJenis] = useState<"cerita" | "foto">("cerita");
   return (
     <div className="flex flex-col gap-4">
@@ -49,7 +47,7 @@ export function FormBukti({ keluargaId, slug, statusDrive, pemilik, driveSiap }:
       {jenis === "cerita" ? (
         <FormCerita keluargaId={keluargaId} slug={slug} />
       ) : (
-        <FormFoto keluargaId={keluargaId} slug={slug} statusDrive={statusDrive} pemilik={pemilik} driveSiap={driveSiap} />
+        <FormFoto keluargaId={keluargaId} slug={slug} statusDrive={statusDrive} />
       )}
     </div>
   );
@@ -87,7 +85,7 @@ function FormCerita({ keluargaId, slug }: { keluargaId: string; slug: string }) 
   );
 }
 
-function FormFoto({ keluargaId, slug, statusDrive, pemilik, driveSiap }: Props) {
+function FormFoto({ keluargaId, slug, statusDrive }: Props) {
   const router = useRouter();
   const [teks, setTeks] = useState("");
   const [sibuk, setSibuk] = useState(false);
@@ -122,25 +120,13 @@ function FormFoto({ keluargaId, slug, statusDrive, pemilik, driveSiap }: Props) 
       <div className="flex flex-col gap-3 rounded-lg border border-kayu p-3">
         <p>
           <strong>Foto belum bisa dikirim.</strong>{" "}
-          {statusDrive === "terputus"
-            ? "Google Drive milik pemilik rumah terputus."
-            : "Pemilik rumah belum menghubungkan Google Drive."}{" "}
-          Foto disimpan di Drive pemilik rumah, bukan di server kami. Sementara itu, kirim bukti berupa cerita tertulis.
+          {statusDrive === "galat"
+            ? "Status folder Drive admin belum bisa diperiksa. Muat ulang halaman."
+            : statusDrive === "terputus"
+              ? "Koneksi Google Drive admin terputus. Minta admin platform menghubungkannya kembali."
+              : "Admin platform belum menghubungkan folder Google Drive."}{" "}
+          Anda tidak perlu menghubungkan akun Google pribadi. Sementara itu, kirim bukti berupa cerita tertulis.
         </p>
-        {pemilik ? (
-          driveSiap ? (
-            <a
-              href={`/api/drive/hubungkan?keluarga=${keluargaId}`}
-              className="inline-flex min-h-11 items-center justify-center self-start rounded-lg bg-primary px-5 py-2.5 font-semibold text-on-primary"
-            >
-              Hubungkan Google Drive
-            </a>
-          ) : (
-            <p className="text-sm text-muted">Penghubung Google Drive belum dikonfigurasi di server ini.</p>
-          )
-        ) : (
-          <p className="text-sm text-muted">Minta pemilik rumah membuka menu Keluarga untuk menghubungkannya.</p>
-        )}
       </div>
     );
   }
@@ -170,8 +156,8 @@ function FormFoto({ keluargaId, slug, statusDrive, pemilik, driveSiap }: Props) 
         await hapusAntrean(item.id);
         setGalat(r.galat);
       }
-    } catch {
-      setGalat("Foto tidak bisa diproses. Coba foto lain.");
+    } catch (e) {
+      setGalat(e instanceof Error ? e.message : "Foto tidak bisa diproses. Coba foto lain.");
     } finally {
       setSibuk(false);
       await muat();
@@ -192,7 +178,9 @@ function FormFoto({ keluargaId, slug, statusDrive, pemilik, driveSiap }: Props) 
           required
           className="min-h-11 rounded-lg border border-field bg-surface px-3 py-2 text-ink"
         />
-        <p className="text-sm text-muted">Foto dikecilkan di ponsel sebelum dikirim dan disimpan di Google Drive pemilik rumah.</p>
+        <p className="text-sm text-muted">
+          Foto dikompres di ponsel sebelum dikirim ke folder Google Drive admin. Anggota keluarga tidak perlu masuk ke Google.
+        </p>
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="catatan-foto" className="font-semibold">

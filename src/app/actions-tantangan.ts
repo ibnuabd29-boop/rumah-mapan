@@ -79,9 +79,19 @@ export async function hapusBukti(data: FormData) {
   const id = uuid.safeParse(data.get("id"));
   if (!id.success) return;
   const supabase = await supabaseServer();
-  const { data: baris } = await supabase.from("bukti").select("keluarga_id").eq("id", id.data).single();
+  const { data: baris } = await supabase
+    .from("bukti")
+    .select("keluarga_id, drive_sumber")
+    .eq("id", id.data)
+    .single();
   const { data: berkas, error } = await supabase.rpc("hapus_bukti", { p_bukti: id.data });
   if (error) return;
-  if (typeof berkas === "string" && baris) await hapusBerkasDrive(baris.keluarga_id, berkas).catch(() => {});
+  if (typeof berkas === "string" && baris) {
+    try {
+      await hapusBerkasDrive(baris.keluarga_id, berkas, baris.drive_sumber === "admin" ? "admin" : "keluarga");
+    } catch (error) {
+      console.error("Foto bukti gagal dihapus dari Google Drive.", error);
+    }
+  }
   revalidatePath("/", "layout");
 }

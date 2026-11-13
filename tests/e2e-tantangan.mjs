@@ -110,8 +110,9 @@ try {
 
   await pAnak.locator("label", { hasText: "Foto" }).click();
   await pAnak.waitForSelector("text=Foto belum bisa dikirim");
-  assert.match(await teksMain(pAnak), /belum menghubungkan Google Drive/);
-  ok("foto tidak bisa dikirim tanpa Drive, ada penjelasan dan jalan keluar (cerita)");
+  assert.match(await teksMain(pAnak), /Admin platform belum menghubungkan folder Google Drive/);
+  assert.doesNotMatch(await teksMain(pAnak), /pemilik rumah.*menghubungkan/i);
+  ok("foto menunggu koneksi Drive admin, anggota rumah tidak diminta menghubungkan akun Google pribadi");
   await pAnak.locator("label", { hasText: "Cerita tertulis" }).click();
 
   const CERITA = "Kami duduk bersama sehabis maghrib dan bergantian bercerita tentang hari ini tanpa ponsel";

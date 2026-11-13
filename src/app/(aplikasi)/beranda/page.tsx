@@ -63,7 +63,7 @@ export default async function Halaman() {
       .eq("keluarga_id", rumah.id)
       .eq("tanggal", hari)
       .maybeSingle(),
-    supabase.rpc("status_drive", { p_keluarga: rumah.id }),
+    supabase.rpc("status_drive_pusat", { p_keluarga: rumah.id }),
     supabase.from("checkin_perasaan").select("suasana")
       .eq("keluarga_id", rumah.id).gte("tanggal", mulaiMinggu).lte("tanggal", hari),
   ]);
@@ -95,9 +95,17 @@ export default async function Halaman() {
 
   return (
     <div className="flex flex-col gap-8">
-      {drive.data === "terputus" ? (
+      {drive.error ? (
         <p role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
-          <strong>Google Drive terputus. </strong>Foto bukti belum bisa dikirim sampai pemilik rumah menghubungkannya lagi di menu Keluarga.
+          Status folder foto admin belum bisa diperiksa. Coba muat ulang halaman.
+        </p>
+      ) : drive.data === "terputus" ? (
+        <p role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
+          Google Drive admin terputus. Foto bukti belum bisa dikirim sampai admin platform menghubungkannya kembali.
+        </p>
+      ) : drive.data === "belum" ? (
+        <p role="note" className="rounded-lg border border-kayu px-3 py-2">
+          Foto bukti baru tersedia setelah admin platform menghubungkan folder Google Drive.
         </p>
       ) : null}
 

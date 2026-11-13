@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/bukti/[i
   const supabase = await supabaseServer();
   const { data: baris } = await supabase
     .from("bukti")
-    .select("keluarga_id, drive_file_id, status")
+    .select("keluarga_id, drive_file_id, drive_sumber, status")
     .eq("id", id)
     .maybeSingle();
   let data = baris;
@@ -23,8 +23,15 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/bukti/[i
   }
   if (!data?.drive_file_id) return new NextResponse("Tidak ditemukan.", { status: 404 });
 
-  const res = await ambilFoto(data.keluarga_id, data.drive_file_id).catch(() => null);
-  if (!res || !res.ok || !res.body) return new NextResponse("Foto belum bisa dimuat.", { status: 502 });
+  const sumber = data.drive_sumber === "admin" ? "admin" : "keluarga";
+  let res: Response;
+  try {
+    res = await ambilFoto(data.keluarga_id, data.drive_file_id, sumber);
+  } catch (error) {
+    console.error("Foto bukti gagal dimuat dari Google Drive.", error);
+    return new NextResponse("Foto belum bisa dimuat.", { status: 502 });
+  }
+  if (!res.ok || !res.body) return new NextResponse("Foto belum bisa dimuat.", { status: 502 });
   return new NextResponse(res.body, {
     headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff" },
   });

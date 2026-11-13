@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Kirim bukti" };
 
 export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">) {
   const { slug } = await params;
-  const { supabase, user, rumah } = await ambilSesi();
+  const { supabase, rumah } = await ambilSesi();
   if (!rumah) redirect("/beranda");
 
   const { data: t } = await supabase
@@ -21,7 +21,7 @@ export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">
     .maybeSingle();
   if (!t) notFound();
 
-  const [{ data: ada }, { data: drive }, { data: tugasHariIni, error: tugasError }] = await Promise.all([
+  const [{ data: ada }, { data: drive, error: driveError }, { data: tugasHariIni, error: tugasError }] = await Promise.all([
     supabase
       .from("bukti")
       .select("status, alasan")
@@ -30,7 +30,7 @@ export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">
       .eq("tanggal", hariIniWib())
       .order("dibuat_at", { ascending: false })
       .limit(1),
-    supabase.rpc("status_drive", { p_keluarga: rumah.id }),
+    supabase.rpc("status_drive_pusat", { p_keluarga: rumah.id }),
     t.aktif
       ? Promise.resolve({ data: null, error: null })
       : supabase.from("tantangan_harian").select("tantangan_slug")
@@ -98,9 +98,13 @@ export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">
           <FormBukti
             keluargaId={rumah.id}
             slug={slug}
-            statusDrive={(drive as "tersambung" | "terputus" | "belum") ?? "belum"}
-            pemilik={rumah.pemilik_id === user.id}
-            driveSiap={driveSiap()}
+            statusDrive={
+              driveError
+                ? "galat"
+                : !driveSiap()
+                  ? "belum"
+                  : ((drive as "tersambung" | "terputus" | "belum") ?? "belum")
+            }
           />
         )}
       </section>

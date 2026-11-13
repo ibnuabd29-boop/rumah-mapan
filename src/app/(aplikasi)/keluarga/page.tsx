@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { batalkanUndangan, keluarkanAnggota } from "@/app/actions-keluarga";
 import { FormHapusKeluarga, FormUndangan } from "@/components/FormKeluarga";
 import { Tombol } from "@/components/ui";
-import { driveSiap } from "@/lib/drive";
 import { ambilSesi } from "@/lib/sesi";
 import { labelPeran } from "@/lib/umum";
 
@@ -10,8 +9,7 @@ export const metadata: Metadata = { title: "Keluarga" };
 
 const tanggal = new Intl.DateTimeFormat("id-ID", { dateStyle: "long", timeZone: "Asia/Jakarta" });
 
-export default async function Halaman({ searchParams }: PageProps<"/keluarga">) {
-  const sp = await searchParams;
+export default async function Halaman() {
   const { supabase, user, rumah } = await ambilSesi();
 
   if (!rumah) {
@@ -30,7 +28,6 @@ export default async function Halaman({ searchParams }: PageProps<"/keluarga">) 
   }
 
   const pemilik = rumah.pemilik_id === user.id;
-  const { data: statusDrive } = pemilik ? await supabase.rpc("status_drive", { p_keluarga: rumah.id }) : { data: null };
   const { data: anggota } = await supabase
     .from("anggota")
     .select("user_id, peran, bergabung_at, profil:user_id (nama)")
@@ -97,38 +94,6 @@ export default async function Halaman({ searchParams }: PageProps<"/keluarga">) 
 
       {pemilik ? (
         <>
-          <section aria-labelledby="drive" className="flex flex-col gap-3">
-            <h2 id="drive" className="text-lg font-semibold">
-              Google Drive untuk foto bukti
-            </h2>
-            {sp.drive === "ok" ? <p role="status" className="rounded-lg border border-primary px-3 py-2"><strong>Berhasil: </strong>Google Drive tersambung.</p> : null}
-            {sp.drive === "gagal" ? <p role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya"><strong>Gagal: </strong>Google Drive belum tersambung. Coba lagi.</p> : null}
-            <p>
-              Status:{" "}
-              <strong>
-                {statusDrive === "tersambung" ? "tersambung" : statusDrive === "terputus" ? "terputus" : "belum dihubungkan"}
-              </strong>
-              .
-            </p>
-            <p className="text-muted">
-              Foto bukti disimpan di folder &quot;Rumah Mapan&quot; di Drive Anda. Aplikasi hanya bisa mengakses folder
-              dan berkas yang dibuatnya sendiri, bukan isi Drive Anda yang lain. Anggota lain melihat foto lewat
-              aplikasi dan tidak perlu akun Google.
-            </p>
-            {statusDrive !== "tersambung" ? (
-              driveSiap() ? (
-                <a
-                  href={`/api/drive/hubungkan?keluarga=${rumah.id}`}
-                  className="inline-flex min-h-11 items-center justify-center self-start rounded-lg bg-primary px-5 py-2.5 font-semibold text-on-primary"
-                >
-                  {statusDrive === "terputus" ? "Hubungkan ulang Google Drive" : "Hubungkan Google Drive"}
-                </a>
-              ) : (
-                <p className="text-muted">Penghubung Google Drive belum dikonfigurasi di server ini.</p>
-              )
-            ) : null}
-          </section>
-
           <section aria-labelledby="undang" className="flex flex-col gap-4">
             <h2 id="undang" className="text-lg font-semibold">
               Undang anggota

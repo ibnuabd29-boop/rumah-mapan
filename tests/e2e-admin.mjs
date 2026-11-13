@@ -70,6 +70,7 @@ try {
   // Akses ditolak untuk yang bukan admin
   await tidakAdaHalaman(pAnak, "/admin");
   await tidakAdaHalaman(pAnak, "/admin/bukti");
+  await tidakAdaHalaman(pAnak, "/admin/drive");
   await tidakAdaHalaman(pAyah, "/admin/keluarga");
   await tidakAdaHalaman(pAyah, "/admin/audit");
   await tidakAdaHalaman(pAnak, "/admin/ekspor");
@@ -196,12 +197,12 @@ try {
     const r = await rest(t);
     assert.equal(r.status, 200); assert.deepEqual(r.body, [], `admin membaca ${t} langsung`);
   }
-  for (const t of ["audit_log", "platform_admins", "drive_koneksi"]) {
+  for (const t of ["audit_log", "platform_admins", "drive_koneksi", "drive_admin_koneksi"]) {
     const r = await rest(t);
     assert.ok(r.status === 401 || r.status === 403 || (Array.isArray(r.body) && r.body.length === 0), `${t}: ${r.status}`);
     assert.ok(!(Array.isArray(r.body) && r.body.length > 0), `${t} terbaca`);
   }
-  ok("dengan token admin, REST langsung ke bukti/keluarga/anggota/undangan kosong dan audit_log, platform_admins, drive_koneksi tertutup");
+  ok("dengan token admin, REST langsung ke bukti/keluarga/anggota/undangan kosong dan tabel audit, platform admin, serta koneksi Drive tertutup");
 
   // Layar kecil: tidak ada overflow horizontal
   for (const url of ["/admin", "/admin/progres", "/admin/keluarga", `/admin/keluarga/${idKeluarga}`, "/admin/pengguna", "/admin/bukti", "/admin/audit"]) {

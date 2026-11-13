@@ -12,7 +12,6 @@ type Detail = {
   keluarga: { id: string; nama: string; dibuat_at: string; pemilik: string };
   anggota: { nama: string; peran: string; bergabung_at: string; aktif_terakhir: string | null; poin: number; selesai: number }[];
   ringkasan: Record<string, unknown> | null;
-  drive: string;
   riwayat: { id: string; tanggal: string; judul: string; kategori: string; pengirim: string; status: string; jenis: string }[];
 };
 type Tren = { tanggal: string; senang: number; tenang: number; biasa: number; sedih: number; cemas: number };
@@ -56,9 +55,7 @@ export default async function Halaman({ params }: PageProps<"/admin/keluarga/[id
       </Link>
       <section aria-labelledby="judul" className="flex flex-col gap-1">
         <h1 id="judul" className="text-2xl font-semibold">{d.keluarga.nama}</h1>
-        <p className="text-muted">
-          Pemilik {d.keluarga.pemilik}. Dibuat {formatWaktu(d.keluarga.dibuat_at)}. Google Drive: {d.drive}.
-        </p>
+        <p className="text-muted">Pemilik {d.keluarga.pemilik}. Dibuat {formatWaktu(d.keluarga.dibuat_at)}.</p>
         <p>
           <strong>{r.poin}</strong> poin, <strong>{r.selesai}</strong> tantangan selesai, hari beruntun{" "}
           <strong>{r.hari_beruntun}</strong> (terbaik {r.beruntun_terbaik}), {r.menunggu} bukti menunggu.

@@ -15,7 +15,7 @@ npm run test:rls             # uji migrasi dan RLS di Postgres lokal (pglite), t
 
 ## Menyiapkan Supabase
 
-1. Jalankan berurutan di SQL Editor (salin **seluruh isi** tiap file, bukan namanya): `supabase/migrations/0001_akun_keluarga.sql`, `0002_tantangan_bukti.sql`, `0003_isi_tantangan.sql`, `0004_admin.sql`, `0005_perasaan_catatan_masa_depan.sql`, `0006_pwa_pengingat.sql`, `0007_konten_admin.sql`.
+1. Jalankan berurutan di SQL Editor (salin **seluruh isi** tiap file, bukan namanya): `supabase/migrations/0001_akun_keluarga.sql`, `0002_tantangan_bukti.sql`, `0003_isi_tantangan.sql`, `0004_admin.sql`, `0005_perasaan_catatan_masa_depan.sql`, `0006_pwa_pengingat.sql`, `0007_konten_admin.sql`, `0008_drive_admin_pusat.sql`.
 2. Migrasi `0007_konten_admin.sql` menambahkan pengelolaan tantangan, kartu obrolan, dan pertanyaan diskusi Materi GenRe. Tombol hapus mengarsipkan konten agar progres lama tetap ada. Kategori dan poin tantangan terkunci setelah bukti tercatat.
 3. Authentication > Providers > Email: aktifkan **Confirm email** dan set panjang kata sandi minimal 8.
 4. Authentication > Providers > Google: isi Client ID dan Secret dari Google Cloud.
@@ -27,18 +27,23 @@ npm run test:rls             # uji migrasi dan RLS di Postgres lokal (pglite), t
 insert into platform_admins (user_id) values ('<uuid dari auth.users>');
 ```
 
-## Foto bukti ke Google Drive (opsional sampai dikonfigurasi)
+## Foto bukti ke Google Drive admin
 
-Tanpa variabel di bawah, bukti tetap bisa dikirim sebagai cerita tertulis dan tombol Drive memberi tahu bahwa penghubung belum dikonfigurasi.
+Admin platform menghubungkan satu akun Google dari menu **Admin > Google Drive**. Anggota keluarga memilih foto dari ponsel dan tidak perlu menghubungkan akun Google. Aplikasi mengompres foto di perangkat hingga maksimal 2 MB; database hanya menyimpan ID Drive dan data bukti, bukan isi foto.
+
+Di Google Cloud, aktifkan Google Drive API, siapkan layar persetujuan OAuth, lalu buat OAuth Client ID jenis **Web application**. Tambahkan redirect URI aplikasi `<alamat situs>/api/drive/callback`, misalnya `https://rumah-mapan.vercel.app/api/drive/callback`. Jika memakai client ID yang sama untuk Google sign-in Supabase, tambahkan juga redirect URI Supabase `<URL proyek Supabase>/auth/v1/callback`. Scope Drive yang digunakan aplikasi adalah `drive.file`.
+
+Isi environment server berikut di `.env.local` untuk lokal dan di Vercel untuk produksi:
 
 ```
-GOOGLE_CLIENT_ID=            # OAuth client (Web). Redirect URI: <alamat situs>/api/drive/callback
+GOOGLE_CLIENT_ID=            # OAuth client (Web)
 GOOGLE_CLIENT_SECRET=
 DRIVE_ENC_KEY=               # 32 byte acak dalam base64: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 SUPABASE_SERVICE_ROLE_KEY=   # hanya di server, jangan pernah diberi awalan NEXT_PUBLIC_
+NEXT_PUBLIC_SITE_URL=https://rumah-mapan.vercel.app
 ```
 
-Scope yang dipakai hanya `drive.file`. Aktifkan Google Drive API di Google Cloud dan tambahkan scope itu di layar persetujuan OAuth.
+Setelah deploy dan migrasi selesai, masuk sebagai admin platform dan hubungkan Google Drive di **Admin > Google Drive**. Aplikasi membuat folder `Rumah Mapan - Foto Bukti`; foto baru akan tampil di **Admin > Bukti**. Foto lama yang tersimpan di Drive keluarga tetap dibaca dari koneksi lama.
 
 ## PWA dan pengingat tantangan
 

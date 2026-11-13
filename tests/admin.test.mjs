@@ -18,7 +18,7 @@ await db.exec(`
 `);
 for (const f of [
   "0001_akun_keluarga", "0002_tantangan_bukti", "0003_isi_tantangan",
-  "0004_admin", "0007_konten_admin",
+  "0004_admin", "0007_konten_admin", "0008_drive_admin_pusat",
 ]) {
   await db.exec(readFileSync(`supabase/migrations/${f}.sql`, "utf8"));
 }
@@ -180,6 +180,7 @@ test("berkas dan ekspor tercatat; log hanya terbaca admin dan memuat siapa, kapa
     values ('${kid}','jalan-sore-keluarga', hari_ini() - 3, '${anak}', 'foto', 'drv123', '${h("e")}', 'disetujui') returning id`)).rows[0].id;
   const r = await as(admin, `select * from admin_berkas_bukti('${fotoId}')`);
   assert.equal(r.rows[0].drive_file_id, "drv123");
+  assert.equal(r.rows[0].drive_sumber, "keluarga");
   await as(admin, `select admin_catat_ekspor(3)`);
   const log = (await as(admin, `select * from admin_audit_log(500)`)).rows;
   const aksi = log.map((x) => x.aksi);
@@ -187,6 +188,47 @@ test("berkas dan ekspor tercatat; log hanya terbaca admin dan memuat siapa, kapa
     assert.ok(aksi.includes(a), `tidak ada ${a}`);
   }
   assert.ok(log.every((x) => x.admin === "Admin" && x.waktu));
+});
+
+test("foto baru memakai Drive pusat admin; token tertutup dan status hanya terlihat anggota", async () => {
+  assert.equal(
+    (await as(ayah, `select status_drive_pusat($1) as status`, [kid])).rows[0].status,
+    "belum",
+  );
+  await db.exec(`
+    insert into drive_admin_koneksi (id, refresh_token_enc, folder_id, terhubung_oleh)
+    values ('utama', 'token-terenkripsi', 'folder-admin', '${admin}');
+  `);
+  await assert.rejects(as(admin, `select * from drive_admin_koneksi`));
+  assert.equal(
+    (await as(ayah, `select status_drive_pusat($1) as status`, [kid])).rows[0].status,
+    "tersambung",
+  );
+  assert.equal(
+    (await as(ayah2, `select status_drive_pusat($1) as status`, [kid])).rows[0].status,
+    "belum",
+  );
+
+  const fotoId = (await as(anak, `
+    select kirim_bukti($1,'jalan-sore-keluarga','foto',null,$2,'foto-admin-1','admin') as id
+  `, [kid, h("f")])).rows[0].id;
+  assert.equal(
+    (await db.query(`select drive_sumber from bukti where id = $1`, [fotoId])).rows[0].drive_sumber,
+    "admin",
+  );
+  const berkas = await as(admin, `select * from admin_berkas_bukti($1)`, [fotoId]);
+  assert.equal(berkas.rows[0].drive_sumber, "admin");
+  assert.equal(berkas.rows[0].drive_file_id, "foto-admin-1");
+
+  await assert.rejects(
+    as(anak, `select kirim_bukti($1,'masak-bersama','foto',null,$2,'foto-2','lain')`, [kid, h("g")]),
+    /drive_sumber_tidak_valid/,
+  );
+  await as(admin, `select admin_catat_drive_terhubung()`);
+  const status = await as(admin, `select * from admin_status_drive()`);
+  assert.equal(status.rows[0].status, "tersambung");
+  assert.equal(status.rows[0].folder_id, "folder-admin");
+  assert.ok((await audit()).some((x) => x.aksi === "hubungkan_drive_admin"));
 });
 
 test("ringkasan_keluarga untuk anggota tetap bekerja dan orang luar tetap ditolak", async () => {

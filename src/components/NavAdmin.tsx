@@ -7,6 +7,7 @@ const MENU = [
   { href: "/admin", label: "Ringkasan", tepat: true },
   { href: "/admin/progres", label: "Progres" },
   { href: "/admin/konten", label: "Konten" },
+  { href: "/admin/drive", label: "Google Drive" },
   { href: "/admin/keluarga", label: "Keluarga" },
   { href: "/admin/pengguna", label: "Pengguna" },
   { href: "/admin/bukti", label: "Bukti" },

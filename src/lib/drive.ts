@@ -13,11 +13,12 @@ export function driveSiap() {
     process.env.GOOGLE_CLIENT_ID &&
       process.env.GOOGLE_CLIENT_SECRET &&
       process.env.DRIVE_ENC_KEY &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
 }
 
-// Klien service role hanya dipakai di server untuk tabel drive_koneksi, yang tertutup bagi klien.
+// Klien service role hanya dipakai di server untuk tabel koneksi Drive yang tertutup bagi klien.
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false },
@@ -76,6 +77,44 @@ export function tautanOtorisasi(keluargaId: string, nonce: string, asal: string)
 }
 
 export async function simpanKoneksi(keluargaId: string, kode: string, asal: string) {
+  const token = await tukarKode(kode, asal);
+  const folderId = await buatFolder(token.access_token, "Rumah Mapan");
+  const { error } = await admin()
+    .from("drive_koneksi")
+    .upsert({
+      keluarga_id: keluargaId,
+      refresh_token_enc: enkripsi(token.refresh_token),
+      folder_id: folderId,
+      status: "tersambung",
+      diperbarui_at: new Date().toISOString(),
+    });
+  if (error) throw new Error("Koneksi Drive keluarga gagal disimpan.");
+}
+
+export async function simpanKoneksiAdmin(kode: string, asal: string, adminId: string) {
+  const token = await tukarKode(kode, asal);
+  const db = admin();
+  const { data: koneksiLama, error: bacaError } = await db
+    .from("drive_admin_koneksi")
+    .select("folder_id")
+    .eq("id", "utama")
+    .maybeSingle();
+  if (bacaError) throw new Error("Folder Drive admin yang sudah ada tidak bisa diperiksa.");
+  const folderId = koneksiLama?.folder_id ?? await buatFolder(token.access_token, "Rumah Mapan - Foto Bukti");
+  const { error } = await db
+    .from("drive_admin_koneksi")
+    .upsert({
+      id: "utama",
+      refresh_token_enc: enkripsi(token.refresh_token),
+      folder_id: folderId,
+      status: "tersambung",
+      terhubung_oleh: adminId,
+      diperbarui_at: new Date().toISOString(),
+    });
+  if (error) throw new Error("Koneksi Drive admin gagal disimpan.");
+}
+
+async function tukarKode(kode: string, asal: string) {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -89,25 +128,17 @@ export async function simpanKoneksi(keluargaId: string, kode: string, asal: stri
   });
   const token = await res.json();
   if (!res.ok || !token.refresh_token) throw new Error("Google tidak mengembalikan refresh token.");
+  return token as { access_token: string; refresh_token: string };
+}
 
-  // Aplikasi membuat foldernya sendiri: scope drive.file tidak bisa melihat folder lain di Drive pemilik.
+async function buatFolder(accessToken: string, nama: string) {
   const folder = await fetch(`${DRIVE_API}/files`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token.access_token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ name: "Rumah Mapan", mimeType: "application/vnd.google-apps.folder" }),
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: nama, mimeType: "application/vnd.google-apps.folder" }),
   }).then((r) => r.json());
   if (!folder.id) throw new Error("Folder Drive gagal dibuat.");
-
-  const { error } = await admin()
-    .from("drive_koneksi")
-    .upsert({
-      keluarga_id: keluargaId,
-      refresh_token_enc: enkripsi(token.refresh_token),
-      folder_id: folder.id,
-      status: "tersambung",
-      diperbarui_at: new Date().toISOString(),
-    });
-  if (error) throw new Error("Koneksi Drive gagal disimpan.");
+  return folder.id as string;
 }
 
 async function akses(keluargaId: string) {
@@ -137,8 +168,44 @@ async function akses(keluargaId: string) {
   return { token: token.access_token as string, folder: data.folder_id as string };
 }
 
+async function aksesAdmin() {
+  const db = admin();
+  const { data, error } = await db.from("drive_admin_koneksi").select("*").eq("id", "utama").maybeSingle();
+  if (error) throw new Error("Status Drive admin tidak bisa dibaca.");
+  if (!data || data.status !== "tersambung") throw new DriveTerputus("Drive admin belum tersambung.");
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      refresh_token: dekripsi(data.refresh_token_enc),
+      grant_type: "refresh_token",
+    }),
+  });
+  const token = await res.json();
+  if (!res.ok) {
+    if (token.error === "invalid_grant") {
+      await db.from("drive_admin_koneksi").update({ status: "terputus" }).eq("id", "utama");
+      throw new DriveTerputus("Akses Drive admin dicabut.");
+    }
+    throw new Error("Gagal memperbarui akses Drive admin.");
+  }
+  return { token: token.access_token as string, folder: data.folder_id as string };
+}
+
 export async function unggahFoto(keluargaId: string, nama: string, isi: Buffer) {
   const { token, folder } = await akses(keluargaId);
+  return unggahKeFolder(token, folder, nama, isi);
+}
+
+export async function unggahFotoAdmin(nama: string, isi: Buffer) {
+  const { token, folder } = await aksesAdmin();
+  return unggahKeFolder(token, folder, nama, isi);
+}
+
+async function unggahKeFolder(token: string, folder: string, nama: string, isi: Buffer) {
   const batas = `mapan${randomBytes(8).toString("hex")}`;
   const meta = JSON.stringify({ name: nama, parents: [folder] });
   const body = Buffer.concat([
@@ -156,17 +223,22 @@ export async function unggahFoto(keluargaId: string, nama: string, isi: Buffer) 
   return json.id as string;
 }
 
-export async function ambilFoto(keluargaId: string, fileId: string) {
-  const { token } = await akses(keluargaId);
+export async function ambilFoto(keluargaId: string, fileId: string, sumber: "keluarga" | "admin" = "keluarga") {
+  const { token } = sumber === "admin" ? await aksesAdmin() : await akses(keluargaId);
   return fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
 
-export async function hapusBerkasDrive(keluargaId: string, fileId: string) {
-  const { token } = await akses(keluargaId);
-  await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}`, {
+export async function hapusBerkasDrive(
+  keluargaId: string,
+  fileId: string,
+  sumber: "keluarga" | "admin" = "keluarga",
+) {
+  const { token } = sumber === "admin" ? await aksesAdmin() : await akses(keluargaId);
+  const response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (!response.ok && response.status !== 404) throw new Error("Penghapusan foto dari Drive gagal.");
 }
