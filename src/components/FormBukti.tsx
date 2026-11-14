@@ -12,11 +12,12 @@ const hurufSaja = (t: string) => t.replace(/[^\p{L}]/gu, "").length;
 
 type Props = {
   keluargaId: string;
+  anakId: string | null;
   slug: string;
   statusDrive: "tersambung" | "terputus" | "belum" | "galat";
 };
 
-export function FormBukti({ keluargaId, slug, statusDrive }: Props) {
+export function FormBukti({ keluargaId, anakId, slug, statusDrive }: Props) {
   const [jenis, setJenis] = useState<"cerita" | "foto">("cerita");
   return (
     <div className="flex flex-col gap-4">
@@ -45,21 +46,22 @@ export function FormBukti({ keluargaId, slug, statusDrive }: Props) {
       </fieldset>
 
       {jenis === "cerita" ? (
-        <FormCerita keluargaId={keluargaId} slug={slug} />
+        <FormCerita keluargaId={keluargaId} anakId={anakId} slug={slug} />
       ) : (
-        <FormFoto keluargaId={keluargaId} slug={slug} statusDrive={statusDrive} />
+        <FormFoto keluargaId={keluargaId} anakId={anakId} slug={slug} statusDrive={statusDrive} />
       )}
     </div>
   );
 }
 
-function FormCerita({ keluargaId, slug }: { keluargaId: string; slug: string }) {
+function FormCerita({ keluargaId, anakId, slug }: { keluargaId: string; anakId: string | null; slug: string }) {
   const [hasil, aksi] = useActionState(kirimCerita, awal);
   const [teks, setTeks] = useState("");
   const huruf = hurufSaja(teks);
   return (
     <form action={aksi} className="flex flex-col gap-3">
       <input type="hidden" name="keluarga_id" value={keluargaId} />
+      {anakId ? <input type="hidden" name="anak_id" value={anakId} /> : null}
       <input type="hidden" name="slug" value={slug} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="teks" className="font-semibold">
@@ -85,7 +87,7 @@ function FormCerita({ keluargaId, slug }: { keluargaId: string; slug: string }) 
   );
 }
 
-function FormFoto({ keluargaId, slug, statusDrive }: Props) {
+function FormFoto({ keluargaId, anakId, slug, statusDrive }: Props) {
   const router = useRouter();
   const [teks, setTeks] = useState("");
   const [sibuk, setSibuk] = useState(false);
@@ -141,7 +143,7 @@ function FormFoto({ keluargaId, slug, statusDrive }: Props) {
     setSibuk(true);
     try {
       const foto = await kompresFoto(berkas);
-      const item = { id: crypto.randomUUID(), keluargaId, slug, teks, foto, dibuat: Date.now() };
+      const item = { id: crypto.randomUUID(), keluargaId, anakId, slug, teks, foto, dibuat: Date.now() };
       await simpanAntrean(item);
       const r = await kirimItem(item);
       if (r.ok) {

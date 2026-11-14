@@ -14,7 +14,7 @@ export default function Halaman() {
       <h2 className="text-lg font-semibold">Data yang kami simpan</h2>
       <ul className="list-disc space-y-1 pl-5">
         <li>Email, nama panggilan, dan peran Anda di rumah.</li>
-        <li>Tanggal lahir anak, hanya untuk memastikan persetujuan orang tua.</li>
+        <li>Tanggal lahir anak, untuk menentukan kelompok umur tantangan dan memeriksa persetujuan orang tua.</li>
         <li>Progres tantangan, bukti tantangan (foto atau cerita), check-in perasaan, dan catatan harian anak.</li>
         <li>Cita-cita keluarga, progres materi per akun, apresiasi keluarga, dan balasan catatan.</li>
       </ul>

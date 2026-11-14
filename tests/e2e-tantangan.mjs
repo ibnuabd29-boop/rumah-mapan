@@ -33,7 +33,27 @@ async function daftar(p, u) {
 }
 const teksMain = (p) => p.locator("main").innerText();
 // Panel tetap terbuka setelah render ulang, jadi buka hanya bila masih tertutup.
-const bukaSituasi = async (p) => { const d = p.locator("details", { hasText: "Ubah situasi hari ini" }); if (!(await d.evaluate((e) => e.open))) await d.locator("summary").click(); };
+const bukaSituasi = async (p) => {
+  const d = p.locator('section[aria-labelledby="tantangan-anak"] details', {
+    hasText: "Ubah situasi hari ini",
+  }).first();
+  if ((await d.count()) > 0 && !(await d.evaluate((e) => e.open))) {
+    await d.locator("summary").click();
+  }
+};
+const pilihSituasiAnak = async (p, nama) => {
+  await bukaSituasi(p);
+  const bagian = p.locator('section[aria-labelledby="tantangan-anak"]');
+  const detail = bagian.locator("details").first();
+  const target = (await detail.count()) > 0 ? detail : bagian;
+  await target.getByRole("button", { name: nama, exact: false }).click();
+  await p.waitForFunction((teks) => {
+    const tombolTerpilih = document.querySelectorAll(
+      'section[aria-labelledby="tantangan-anak"] button[aria-pressed="true"]',
+    );
+    return Array.from(tombolTerpilih).some((tombol) => tombol.textContent?.includes(teks));
+  }, nama);
+};
 const klik = (p, nama, exact = true) => p.getByRole("button", { name: nama, exact }).click();
 
 try {
@@ -58,31 +78,36 @@ try {
 
   // Pilih situasi hari ini
   await pAyah.goto(`${BASE}/beranda`);
-  await pAyah.waitForSelector("text=Situasi hari ini");
-  await klik(pAyah, /Ayah pulang kerja/, false);
-  await pAyah.waitForSelector("text=Tantangan hari ini, Sepulang kerja");
+  await pAyah.waitForSelector("text=Anak Uji");
+  await pilihSituasiAnak(pAyah, "Ayah pulang kerja");
+  await pAyah.locator('section[aria-labelledby="tantangan-anak"]').getByText("Sepulang kerja").waitFor();
   ok("mode pulang kerja memilih tantangan Sepulang kerja");
 
-  await bukaSituasi(pAyah);
-  await klik(pAyah, /Anak ke tempat kerja/, false);
-  await pAyah.waitForSelector("text=Tantangan hari ini, Ke tempat kerja");
-  assert.match(await teksMain(pAyah), /Pastikan tempat kerja mengizinkan anak berkunjung/);
+  await pilihSituasiAnak(pAyah, "Anak ke tempat kerja");
+  await pAyah.locator('section[aria-labelledby="tantangan-anak"]').getByText(
+    "Pastikan tempat kerja mengizinkan anak berkunjung",
+  ).waitFor();
+  assert.match(await pAyah.locator('section[aria-labelledby="tantangan-anak"]').innerText(), /Pastikan tempat kerja mengizinkan anak berkunjung/);
   ok("mode kunjungan memilih tantangan Ke tempat kerja dan menampilkan peringatan izin");
 
-  await bukaSituasi(pAyah);
-  await klik(pAyah, /Hari biasa/, false);
-  await pAyah.waitForFunction(() => /Tantangan hari ini, (Komunikasi|Kebersamaan|Empati|Kemandirian|Kreativitas)/.test(document.body.innerText));
-  const judul1 = await pAyah.locator("article h2").innerText();
+  await pilihSituasiAnak(pAyah, "Hari biasa");
+  await pAyah.waitForFunction(() => {
+    const teks = document.querySelector('section[aria-labelledby="tantangan-anak"] article')?.innerText ?? "";
+    return /(Komunikasi|Kebersamaan|Empati|Kemandirian|Kreativitas)/.test(teks);
+  });
+  const judul1 = await pAyah.locator('section[aria-labelledby="tantangan-anak"] article h4').innerText();
   await klik(pAyah, "Ganti tantangan");
-  await pAyah.waitForFunction((j) => document.querySelector("article h2")?.textContent !== j, judul1);
-  const judul = await pAyah.locator("article h2").innerText();
+  await pAyah.waitForFunction((j) => {
+    return document.querySelector('section[aria-labelledby="tantangan-anak"] article h4')?.textContent !== j;
+  }, judul1);
+  const judul = await pAyah.locator('section[aria-labelledby="tantangan-anak"] article h4').innerText();
   assert.notEqual(judul, judul1);
   ok(`hari biasa memilih kategori umum, ganti tantangan: "${judul1}" menjadi "${judul}"`);
 
   // Anak melihat tantangan yang sama tanpa tombol ganti
   await pAnak.goto(`${BASE}/beranda`);
-  await pAnak.waitForSelector("article h2");
-  assert.equal(await pAnak.locator("article h2").innerText(), judul);
+  await pAnak.waitForSelector('section[aria-labelledby="tantangan-anak"] article h4');
+  assert.equal(await pAnak.locator('section[aria-labelledby="tantangan-anak"] article h4').innerText(), judul);
   assert.equal(await pAnak.getByRole("button", { name: "Ganti tantangan" }).count(), 0);
   assert.equal(await pAnak.getByRole("button", { name: "Lewati hari ini" }).count(), 0);
   ok("anak melihat tantangan yang sama tanpa tombol ganti atau lewati");
@@ -92,6 +117,8 @@ try {
   await pAnak.waitForSelector("main li h2");
   const semua = await pAnak.locator("main li h2").count();
   assert.ok(semua >= 30, `jumlah ${semua}`);
+  assert.equal(await pAnak.getByRole("heading", { name: "Peta kebiasaan belajar" }).count(), 1);
+  assert.equal(await pAnak.getByRole("heading", { name: "Rencana satu minggu" }).count(), 0);
   await pAnak.goto(`${BASE}/tantangan?k=ke_tempat_kerja`);
   await pAnak.waitForSelector("main li h2");
   assert.equal(await pAnak.locator("main li h2").count(), 7);

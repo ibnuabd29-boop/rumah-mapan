@@ -12,7 +12,7 @@ export const ambilSesi = cache(async (opsi: { perluSetuju?: boolean } = {}) => {
 
   const { data: profil } = await supabase
     .from("profiles")
-    .select("id, nama, privasi_disetujui_at")
+    .select("id, nama, tgl_lahir, privasi_disetujui_at")
     .eq("id", data.user.id)
     .single();
   if (!profil) redirect("/masuk?galat=tautan");

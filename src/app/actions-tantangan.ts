@@ -13,23 +13,37 @@ const uuid = z.string().uuid();
 
 export async function aturTantangan(data: FormData) {
   const v = z
-    .object({ keluarga_id: uuid, mode: z.enum(["biasa", "pulang_kerja", "hari_kunjungan"]), ganti: z.string().optional() })
+    .object({
+      keluarga_id: uuid,
+      anak_id: uuid.optional().or(z.literal("")),
+      mode: z.enum(["biasa", "pulang_kerja", "hari_kunjungan"]),
+      ganti: z.string().optional(),
+    })
     .safeParse(Object.fromEntries(data));
-  if (!v.success) return;
+  if (!v.success) throw new Error("Periksa pilihan tantangan.");
   const supabase = await supabaseServer();
-  await supabase.rpc("atur_tantangan_hari_ini", {
+  const { error } = await supabase.rpc("atur_tantangan_hari_ini", {
     p_keluarga: v.data.keluarga_id,
     p_mode: v.data.mode,
     p_ganti: v.data.ganti === "1",
+    p_anak: v.data.anak_id || null,
   });
+  if (error) throw new Error(galatTantangan(error.message));
   revalidatePath("/beranda");
 }
 
 export async function lewatiTantangan(data: FormData) {
-  const id = uuid.safeParse(data.get("keluarga_id"));
-  if (!id.success) return;
+  const v = z.object({
+    keluarga_id: uuid,
+    anak_id: uuid.optional().or(z.literal("")),
+  }).safeParse(Object.fromEntries(data));
+  if (!v.success) throw new Error("Pilihan tantangan tidak valid.");
   const supabase = await supabaseServer();
-  await supabase.rpc("lewati_tantangan", { p_keluarga: id.data });
+  const { error } = await supabase.rpc("lewati_tantangan", {
+    p_keluarga: v.data.keluarga_id,
+    p_anak: v.data.anak_id || null,
+  });
+  if (error) throw new Error(galatTantangan(error.message));
   revalidatePath("/beranda");
 }
 
@@ -41,6 +55,7 @@ export async function kirimCerita(_: HasilT, data: FormData): Promise<HasilT> {
     .object({
       keluarga_id: uuid,
       slug: z.string().min(1).max(80),
+      anak_id: uuid.optional().or(z.literal("")),
       teks: z.string().max(2000, "Cerita maksimal 2000 karakter."),
     })
     .safeParse(Object.fromEntries(data));
@@ -53,6 +68,7 @@ export async function kirimCerita(_: HasilT, data: FormData): Promise<HasilT> {
     p_teks: v.data.teks,
     p_hash: await sha256Hex(normalisasi(v.data.teks)),
     p_drive_file_id: null,
+    p_anak: v.data.anak_id || null,
   });
   if (error) return { galat: galatTantangan(error.message) };
   revalidatePath("/", "layout");

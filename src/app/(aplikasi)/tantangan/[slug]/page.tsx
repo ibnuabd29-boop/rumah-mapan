@@ -5,36 +5,58 @@ import { FormBukti } from "@/components/FormBukti";
 import { driveSiap } from "@/lib/drive";
 import { hariIniWib } from "@/lib/data";
 import { ambilSesi } from "@/lib/sesi";
-import { labelKategori, STATUS_BUKTI } from "@/lib/tantangan";
+import { labelKategori, labelSegmen, segmenUsiaAnak, STATUS_BUKTI } from "@/lib/tantangan";
 
 export const metadata: Metadata = { title: "Kirim bukti" };
 
-export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">) {
-  const { slug } = await params;
-  const { supabase, rumah } = await ambilSesi();
+export default async function Halaman({ params, searchParams }: PageProps<"/tantangan/[slug]">) {
+  const [{ slug }, sp] = await Promise.all([params, searchParams]);
+  const { supabase, rumah, user, profil } = await ambilSesi();
   if (!rumah) redirect("/beranda");
 
   const { data: t } = await supabase
     .from("tantangan")
-    .select("slug, kategori, judul, isi, menit, poin, peringatan, aktif")
+    .select("slug, kategori, segmen, judul, isi, menit, poin, peringatan, aktif")
     .eq("slug", slug)
     .maybeSingle();
   if (!t) notFound();
 
+  const anakId = rumah.peran === "anak" ? user.id : typeof sp.anak === "string" ? sp.anak : null;
+  const { data: anggotaAnak } = anakId && rumah.peran !== "anak"
+    ? await supabase.from("anggota").select("user_id, peran, profil:user_id (tgl_lahir)")
+        .eq("keluarga_id", rumah.id).eq("user_id", anakId).eq("peran", "anak").maybeSingle()
+    : { data: null };
+  if (anakId && rumah.peran !== "anak" && !anggotaAnak) notFound();
+  const tglLahir = rumah.peran === "anak"
+    ? profil.tgl_lahir
+    : (anggotaAnak?.profil as unknown as { tgl_lahir: string | null } | null)?.tgl_lahir ?? null;
+  const segmen = segmenUsiaAnak(tglLahir);
+  if (t.segmen && (!anakId || t.segmen !== segmen)) notFound();
+
+  const queryBukti = supabase
+    .from("bukti")
+    .select("status, alasan")
+    .eq("keluarga_id", rumah.id)
+    .eq("tantangan_slug", slug)
+    .eq("tanggal", hariIniWib())
+    .order("dibuat_at", { ascending: false })
+    .limit(1);
+  if (anakId) queryBukti.or(`anak_id.is.null,anak_id.eq.${anakId}`);
+  else queryBukti.is("anak_id", null);
+
+  const queryTugas = t.aktif
+    ? Promise.resolve({ data: null, error: null })
+    : (anakId
+        ? supabase.from("tantangan_harian").select("tantangan_slug")
+            .eq("keluarga_id", rumah.id).eq("tanggal", hariIniWib())
+            .eq("tantangan_slug", slug).eq("anak_id", anakId).maybeSingle()
+        : supabase.from("tantangan_harian").select("tantangan_slug")
+            .eq("keluarga_id", rumah.id).eq("tanggal", hariIniWib())
+            .eq("tantangan_slug", slug).is("anak_id", null).maybeSingle());
   const [{ data: ada }, { data: drive, error: driveError }, { data: tugasHariIni, error: tugasError }] = await Promise.all([
-    supabase
-      .from("bukti")
-      .select("status, alasan")
-      .eq("keluarga_id", rumah.id)
-      .eq("tantangan_slug", slug)
-      .eq("tanggal", hariIniWib())
-      .order("dibuat_at", { ascending: false })
-      .limit(1),
+    queryBukti,
     supabase.rpc("status_drive_pusat", { p_keluarga: rumah.id }),
-    t.aktif
-      ? Promise.resolve({ data: null, error: null })
-      : supabase.from("tantangan_harian").select("tantangan_slug")
-          .eq("keluarga_id", rumah.id).eq("tanggal", hariIniWib()).eq("tantangan_slug", slug).maybeSingle(),
+    queryTugas,
   ]);
   if (tugasError) {
     return <p role="alert" className="border border-bahaya p-3 text-bahaya">Status tantangan belum bisa diperiksa. Muat ulang halaman.</p>;
@@ -45,13 +67,16 @@ export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">
 
   return (
     <div className="flex flex-col gap-6">
-      <Link href="/tantangan" className="inline-flex min-h-11 items-center font-semibold underline">
+      <Link
+        href={anakId ? `/tantangan?anak=${anakId}` : "/tantangan"}
+        className="inline-flex min-h-11 items-center font-semibold underline"
+      >
         Kembali ke daftar tantangan
       </Link>
 
       <section aria-labelledby="judul" className="flex flex-col gap-2">
         <p className="text-sm text-muted">
-          {labelKategori(t.kategori)}, {t.menit} menit, +{t.poin} poin
+          {labelKategori(t.kategori)}, {labelSegmen(t.segmen)}, {t.menit} menit, +{t.poin} poin
         </p>
         <h1 id="judul" className="text-2xl font-semibold">
           {t.judul}
@@ -97,6 +122,7 @@ export default async function Halaman({ params }: PageProps<"/tantangan/[slug]">
         ) : (
           <FormBukti
             keluargaId={rumah.id}
+            anakId={anakId}
             slug={slug}
             statusDrive={
               driveError

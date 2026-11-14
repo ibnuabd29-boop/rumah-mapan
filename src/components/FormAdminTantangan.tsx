@@ -3,11 +3,12 @@
 import { useActionState, useEffect, useRef } from "react";
 import { simpanTantanganAdmin, type HasilA } from "@/app/actions-admin";
 import { Medan, Pesan, Pilihan, Tombol } from "@/components/ui";
-import { KATEGORI } from "@/lib/tantangan";
+import { KATEGORI, SEGMEN_TANTANGAN } from "@/lib/tantangan";
 
 type Tantangan = {
   slug: string;
   kategori: string;
+  segmen: string | null;
   judul: string;
   isi: string;
   menit: number;
@@ -15,6 +16,7 @@ type Tantangan = {
   peringatan: string | null;
   poin_terkunci: boolean;
   kategori_terkunci: boolean;
+  segmen_terkunci: boolean;
 };
 
 const awal: HasilA = {};
@@ -70,6 +72,36 @@ export function FormAdminTantangan({ tantangan }: { tantangan?: Tantangan }) {
           </Pilihan>
         )}
       </div>
+      {tantangan?.segmen_terkunci ? (
+        <div className="flex flex-col gap-1.5">
+          <Pilihan
+            id={`segmen-${id}`}
+            name="segmen_tampilan"
+            label="Segmen umur"
+            value={tantangan.segmen ?? ""}
+            disabled
+          >
+            <option value="">Untuk semua usia</option>
+            {SEGMEN_TANTANGAN.map((segmen) => (
+              <option key={segmen.nilai} value={segmen.nilai}>{segmen.label}</option>
+            ))}
+          </Pilihan>
+          <input type="hidden" name="segmen" value={tantangan.segmen ?? ""} />
+          <p className="text-sm text-muted">Segmen umur dikunci karena bukti tantangan ini sudah tercatat.</p>
+        </div>
+      ) : (
+        <Pilihan
+          id={`segmen-${id}`}
+          name="segmen"
+          label="Segmen umur"
+          defaultValue={tantangan?.segmen ?? ""}
+        >
+          <option value="">Untuk semua usia</option>
+          {SEGMEN_TANTANGAN.map((segmen) => (
+            <option key={segmen.nilai} value={segmen.nilai}>{segmen.label}</option>
+          ))}
+        </Pilihan>
+      )}
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`isi-${id}`} className="font-semibold">Instruksi atau pertanyaan</label>
         <textarea

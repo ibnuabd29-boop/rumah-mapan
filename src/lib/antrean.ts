@@ -2,6 +2,7 @@
 export type ItemAntrean = {
   id: string;
   keluargaId: string;
+  anakId: string | null;
   slug: string;
   teks: string;
   foto: Blob;
@@ -38,6 +39,7 @@ export const hapusAntrean = (id: string) => tx("readwrite", (s) => s.delete(id))
 export async function kirimItem(i: ItemAntrean): Promise<HasilKirim> {
   const f = new FormData();
   f.set("keluarga_id", i.keluargaId);
+  if (i.anakId) f.set("anak_id", i.anakId);
   f.set("slug", i.slug);
   f.set("teks", i.teks);
   f.set("berkas", new File([i.foto], "foto.jpg", { type: "image/jpeg" }));

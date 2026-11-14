@@ -12,6 +12,9 @@ const GALAT: Record<string, string> = {
   bukti_tidak_ada: "Bukti tidak ditemukan.",
   tantangan_diarsipkan: "Tantangan ini sudah diarsipkan dan tidak menerima bukti baru.",
   tantangan_tidak_tersedia: "Belum ada tantangan aktif untuk situasi ini. Hubungi admin platform.",
+  anak_wajib: "Pilih profil anak untuk mengirim bukti tantangan ini.",
+  anak_tidak_ada: "Profil anak tidak ditemukan di rumah ini.",
+  segmen_tidak_sesuai: "Tantangan ini tidak sesuai dengan kelompok umur anak.",
 };
 
 export function galatTantangan(pesan: string) {

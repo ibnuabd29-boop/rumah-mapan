@@ -17,6 +17,7 @@ const GALAT: Record<string, string> = {
   durasi_tidak_valid: "Durasi harus antara 3 dan 120 menit.",
   poin_tidak_valid: "Poin harus antara 5 dan 30.",
   kategori_tidak_valid: "Pilih kategori tantangan yang tersedia.",
+  segmen_tidak_valid: "Pilih segmen umur yang tersedia.",
   peringatan_tidak_valid: "Peringatan maksimal 500 karakter.",
   slug_sudah_dipakai: "ID tantangan sudah digunakan. Ubah judul lalu coba lagi.",
   tantangan_tidak_ada: "Tantangan tidak ditemukan.",
@@ -24,6 +25,7 @@ const GALAT: Record<string, string> = {
   tantangan_tidak_tersedia: "Belum ada tantangan aktif untuk situasi ini. Hubungi admin platform.",
   poin_tidak_boleh_diubah: "Poin tidak dapat diubah karena tantangan ini sudah memiliki bukti.",
   kategori_tidak_boleh_diubah: "Kategori tidak dapat diubah karena tantangan ini sudah memiliki bukti.",
+  segmen_tidak_boleh_diubah: "Segmen umur tidak dapat diubah karena tantangan ini sudah memiliki bukti.",
   tantangan_diarsipkan: "Tantangan ini sudah diarsipkan dan tidak menerima bukti baru.",
   status_tidak_valid: "Status konten tidak valid.",
   jenis_tidak_valid: "Jenis pertanyaan tidak valid.",
@@ -86,6 +88,8 @@ export async function simpanTantanganAdmin(_: HasilA, data: FormData): Promise<H
   const v = z.object({
     slug: z.string().max(80).optional(),
     kategori: kategoriTantangan,
+    segmen: z.enum(["berani", "beraksi", "berkolaborasi"]).nullable().or(z.literal(""))
+      .transform((segmen) => segmen || null),
     judul: z.string().trim().min(3).max(100),
     isi: z.string().trim().min(5).max(2000),
     menit: z.coerce.number().int().min(3).max(120),
@@ -99,6 +103,7 @@ export async function simpanTantanganAdmin(_: HasilA, data: FormData): Promise<H
   const { error } = await supabase.rpc("admin_simpan_tantangan", {
     p_slug: slug,
     p_kategori: v.data.kategori,
+    p_segmen: v.data.segmen,
     p_judul: v.data.judul,
     p_isi: v.data.isi,
     p_menit: v.data.menit,

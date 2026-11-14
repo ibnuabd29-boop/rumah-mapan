@@ -18,7 +18,12 @@ export async function POST(request: NextRequest) {
 
   const form = await request.formData().catch(() => null);
   const v = z
-    .object({ keluarga_id: z.string().uuid(), slug: z.string().min(1).max(80), teks: z.string().max(2000).optional() })
+    .object({
+      keluarga_id: z.string().uuid(),
+      anak_id: z.string().uuid().optional(),
+      slug: z.string().min(1).max(80),
+      teks: z.string().max(2000).optional(),
+    })
     .safeParse(form ? Object.fromEntries(form) : {});
   const berkas = form?.get("berkas");
   if (!v.success || !(berkas instanceof File)) return galat("Permintaan tidak lengkap.", 400, false);
@@ -65,6 +70,7 @@ export async function POST(request: NextRequest) {
     p_hash: hash,
     p_drive_file_id: fileId,
     p_drive_sumber: "admin",
+    p_anak: v.data.anak_id ?? null,
   });
   if (error) {
     try {

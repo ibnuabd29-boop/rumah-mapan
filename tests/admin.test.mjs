@@ -18,7 +18,7 @@ await db.exec(`
 `);
 for (const f of [
   "0001_akun_keluarga", "0002_tantangan_bukti", "0003_isi_tantangan",
-  "0004_admin", "0007_konten_admin", "0008_drive_admin_pusat",
+  "0004_admin", "0007_konten_admin", "0008_drive_admin_pusat", "0009_tantangan_segmen_anak",
 ]) {
   await db.exec(readFileSync(`supabase/migrations/${f}.sql`, "utf8"));
 }
@@ -40,6 +40,9 @@ const kid = (await as(ayah, `select buat_keluarga('Rumah Satu','ayah') as id`)).
 const kid2 = (await as(ayah2, `select buat_keluarga('Rumah Dua','ayah') as id`)).rows[0].id;
 await as(ayah, `select buat_undangan($1,'anak',$2,true)`, [kid, "1".repeat(64)]);
 await as(anak, `select terima_undangan($1,'2015-01-01')`, ["1".repeat(64)]);
+await db.exec(`
+  update profiles set tgl_lahir = (hari_ini() - interval '11 years')::date where id = '${anak}';
+`);
 const h = (c) => c.repeat(64);
 const CERITA = "Kami bercerita tentang hari ini dan saling mendengarkan dengan tenang";
 const b1 = (await as(anak, `select kirim_bukti($1,'tiga-pujian','cerita',$2,$3,null) as id`, [kid, CERITA, h("a")])).rows[0].id;
@@ -235,6 +238,94 @@ test("ringkasan_keluarga untuk anggota tetap bekerja dan orang luar tetap ditola
   assert.equal((await as(ayah, `select ringkasan_keluarga('${kid}') as r`)).rows[0].r.selesai >= 1, true);
   await assert.rejects(as(ayah2, `select ringkasan_keluarga('${kid}')`), /bukan_anggota/);
   await assert.rejects(as(admin, `select ringkasan_keluarga('${kid}')`), /bukan_anggota/);
+});
+
+test("segmen usia memakai ulang tahun terakhir dan mencakup batas umur", async () => {
+  const kasus = [
+    ["2016-11-14", "berani"],
+    ["2012-11-14", "berani"],
+    ["2011-11-14", "beraksi"],
+    ["2007-11-14", "beraksi"],
+    ["2006-11-14", "berkolaborasi"],
+    ["2002-11-14", "berkolaborasi"],
+    ["2016-11-15", null],
+    ["2001-11-14", null],
+  ];
+  for (const [lahir, segmen] of kasus) {
+    const hasil = (await db.query(
+      `select segmen_usia_anak($1::date, '2026-11-14'::date) as segmen`,
+      [lahir],
+    )).rows[0].segmen;
+    assert.equal(hasil, segmen, `tanggal lahir ${lahir}`);
+  }
+  const konten = await db.query(`
+    select segmen::text as segmen, count(*)::int as jumlah
+    from tantangan where aktif group by segmen
+  `);
+  const jumlahPerSegmen = new Map(konten.rows.map((r) => [r.segmen, r.jumlah]));
+  for (const segmen of ["berani", "beraksi", "berkolaborasi"]) {
+    assert.ok((jumlahPerSegmen.get(segmen) ?? 0) >= 4, `konten aktif segmen ${segmen}`);
+  }
+});
+
+test("penugasan harian dan bukti terpisah per anak serta menolak segmen yang salah", async () => {
+  const anak2 = await user("anak2@x.test", "Anak Dua");
+  await as(ayah, `select buat_undangan($1,'anak',$2,true)`, [kid, "2".repeat(64)]);
+  await as(anak2, `select terima_undangan($1,'2010-01-01')`, ["2".repeat(64)]);
+  await db.query(`update profiles set tgl_lahir = (hari_ini() - interval '17 years')::date where id = $1`, [anak2]);
+
+  await as(admin, `
+    select admin_simpan_tantangan(
+      'uji-segmen-berani', 'komunikasi', 'Tugas BERANI', 'Bicarakan satu hal bersama keluarga.', 10, 10, null, 'berani'
+    )
+  `);
+  await as(admin, `
+    select admin_simpan_tantangan(
+      'uji-segmen-beraksi', 'komunikasi', 'Tugas BERAKSI', 'Rencanakan satu langkah bersama keluarga.', 10, 10, null, 'beraksi'
+    )
+  `);
+  await as(admin, `
+    select admin_simpan_tantangan(
+      'uji-segmen-berkolaborasi', 'komunikasi', 'Tugas BERKOLABORASI', 'Susun rencana bersama keluarga.', 10, 10, null, 'berkolaborasi'
+    )
+  `);
+
+  await db.exec(`
+    update tantangan set aktif = false
+    where segmen is null and kategori not in ('sepulang_kerja', 'ke_tempat_kerja');
+  `);
+  let tugasBerani;
+  let tugasBeraksi;
+  try {
+    tugasBerani = (await as(ayah, `
+      select atur_tantangan_hari_ini($1, 'biasa', false, $2) as slug
+    `, [kid, anak])).rows[0].slug;
+    tugasBeraksi = (await as(ayah, `
+      select atur_tantangan_hari_ini($1, 'biasa', false, $2) as slug
+    `, [kid, anak2])).rows[0].slug;
+  } finally {
+    await db.exec(`update tantangan set aktif = true where segmen is null`);
+  }
+  const segmenBerani = (await db.query(`select segmen from tantangan where slug = $1`, [tugasBerani])).rows[0].segmen;
+  const segmenBeraksi = (await db.query(`select segmen from tantangan where slug = $1`, [tugasBeraksi])).rows[0].segmen;
+  assert.equal(segmenBerani, "berani");
+  assert.equal(segmenBeraksi, "beraksi");
+
+  await assert.rejects(as(anak, `
+    select kirim_bukti($1, 'uji-segmen-beraksi', 'cerita', $2, $3, null, 'keluarga', $4)
+  `, [kid, CERITA, h("j"), anak]), /segmen_tidak_sesuai/);
+
+  const buktiAnak = (await as(ayah, `
+    select kirim_bukti($1, 'tiga-pujian', 'cerita', $2, $3, null, 'keluarga', $4) as id
+  `, [kid, CERITA, h("k"), anak])).rows[0].id;
+  const buktiAnakDua = (await as(ayah, `
+    select kirim_bukti($1, 'tiga-pujian', 'cerita', $2, $3, null, 'keluarga', $4) as id
+  `, [kid, CERITA + " bersama keluarga", h("l"), anak2])).rows[0].id;
+  assert.notEqual(buktiAnak, buktiAnakDua);
+  assert.equal((await db.query(`
+    select count(*)::int as jumlah from bukti
+    where id in ($1, $2) and anak_id is not null
+  `, [buktiAnak, buktiAnakDua])).rows[0].jumlah, 2);
 });
 
 test("admin mengelola tantangan sambil menjaga tugas dan poin historis", async () => {

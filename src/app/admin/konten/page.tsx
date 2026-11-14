@@ -4,13 +4,14 @@ import { FormAdminPertanyaan } from "@/components/FormAdminPertanyaan";
 import { FormAdminStatusKonten } from "@/components/FormAdminStatusKonten";
 import { FormAdminTantangan } from "@/components/FormAdminTantangan";
 import { perluAdmin } from "@/lib/admin";
-import { labelKategori } from "@/lib/tantangan";
+import { labelKategori, labelSegmen } from "@/lib/tantangan";
 
 export const metadata: Metadata = { title: "Kelola konten | Admin" };
 
 type Tantangan = {
   slug: string;
   kategori: string;
+  segmen: string | null;
   judul: string;
   isi: string;
   menit: number;
@@ -19,6 +20,7 @@ type Tantangan = {
   aktif: boolean;
   poin_terkunci: boolean;
   kategori_terkunci: boolean;
+  segmen_terkunci: boolean;
 };
 
 type JenisPertanyaan = "obrolan" | "materi_genre";
@@ -95,7 +97,7 @@ export default async function Halaman() {
             <div>
               <h2 id="tantangan" className="text-xl font-semibold">Tantangan</h2>
               <p className="text-sm text-muted">
-                Isi tantangan menjadi instruksi atau pertanyaan yang dibaca keluarga. Kategori dan poin terkunci setelah bukti tercatat.
+                Isi tantangan menjadi instruksi atau pertanyaan yang dibaca keluarga. Kategori, segmen umur, dan poin terkunci setelah bukti tercatat.
               </p>
             </div>
             <details className="rounded-lg border border-line p-3">
@@ -115,7 +117,7 @@ export default async function Halaman() {
                       </summary>
                       <div className="flex flex-col gap-2 pb-3 pt-2">
                         <p className="text-sm text-muted">
-                          {labelKategori(item.kategori)}, {item.menit} menit, {item.poin} poin. ID: {item.slug}
+                          {labelKategori(item.kategori)}, {labelSegmen(item.segmen)}, {item.menit} menit, {item.poin} poin. ID: {item.slug}
                         </p>
                         <FormAdminTantangan tantangan={item} />
                       </div>

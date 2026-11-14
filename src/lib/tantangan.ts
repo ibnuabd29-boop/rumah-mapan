@@ -12,6 +12,33 @@ export function labelKategori(k: string) {
   return KATEGORI.find((x) => x.nilai === k)?.label ?? k;
 }
 
+export const SEGMEN_TANTANGAN = [
+  { nilai: "berani", label: "BERANI (10-14 tahun)" },
+  { nilai: "beraksi", label: "BERAKSI (15-19 tahun)" },
+  { nilai: "berkolaborasi", label: "BERKOLABORASI (20-24 tahun)" },
+] as const;
+
+export type SegmenTantangan = (typeof SEGMEN_TANTANGAN)[number]["nilai"];
+
+export function labelSegmen(segmen: string | null) {
+  return SEGMEN_TANTANGAN.find((x) => x.nilai === segmen)?.label ?? "Untuk semua usia";
+}
+
+export function segmenUsiaAnak(tglLahir: string | null) {
+  if (!tglLahir || !/^\d{4}-\d{2}-\d{2}$/.test(tglLahir)) return null;
+  const hari = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  if (tglLahir > hari) return null;
+
+  const tahunLahir = Number(tglLahir.slice(0, 4));
+  let umur = Number(hari.slice(0, 4)) - tahunLahir;
+  if (hari.slice(5) < tglLahir.slice(5)) umur -= 1;
+
+  return SEGMEN_TANTANGAN.find((x) => {
+    const [min, max] = x.nilai === "berani" ? [10, 14] : x.nilai === "beraksi" ? [15, 19] : [20, 24];
+    return umur >= min && umur <= max;
+  })?.nilai ?? null;
+}
+
 export const MODE = [
   { nilai: "biasa", label: "Hari biasa", bantu: "Tantangan umum untuk seluruh keluarga." },
   { nilai: "pulang_kerja", label: "Ayah pulang kerja", bantu: "Singkat, 3 sampai 25 menit, ayah boleh tetap santai." },

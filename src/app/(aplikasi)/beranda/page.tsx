@@ -6,7 +6,14 @@ import { IkonFitur } from "@/components/IkonFitur";
 import { Tombol, TautanTombol } from "@/components/ui";
 import { ambilRingkasan, hariIniWib } from "@/lib/data";
 import { ambilSesi } from "@/lib/sesi";
-import { MODE, daftarLencana, labelKategori, tahapRumah } from "@/lib/tantangan";
+import {
+  MODE,
+  daftarLencana,
+  labelKategori,
+  labelSegmen,
+  segmenUsiaAnak,
+  tahapRumah,
+} from "@/lib/tantangan";
 import { SUASANA } from "@/lib/langkah-enam";
 import { labelPeran } from "@/lib/umum";
 
@@ -21,7 +28,7 @@ function mundurHari(tanggal: string, jumlah: number) {
 }
 
 export default async function Halaman() {
-  const { supabase, rumah } = await ambilSesi();
+  const { supabase, user, rumah } = await ambilSesi();
 
   if (!rumah) {
     return (
@@ -55,7 +62,7 @@ export default async function Halaman() {
   const hari = hariIniWib();
   const mulaiMinggu = mundurHari(hari, 6);
   const orangTua = PERAN_ORTU.includes(rumah.peran);
-  const [ringkasan, harian, drive, checkinMinggu] = await Promise.all([
+  const [ringkasan, harian, drive, checkinMinggu, daftarAnggota] = await Promise.all([
     ambilRingkasan(supabase, rumah.id),
     supabase
       .from("tantangan_harian")
@@ -66,7 +73,35 @@ export default async function Halaman() {
     supabase.rpc("status_drive_pusat", { p_keluarga: rumah.id }),
     supabase.from("checkin_perasaan").select("suasana")
       .eq("keluarga_id", rumah.id).gte("tanggal", mulaiMinggu).lte("tanggal", hari),
+    supabase.from("anggota").select("user_id, peran, profil:user_id (nama, tgl_lahir)")
+      .eq("keluarga_id", rumah.id).order("bergabung_at", { ascending: true }),
   ]);
+
+  const semuaAnak = (daftarAnggota.data ?? [])
+    .filter((a) => a.peran === "anak")
+    .map((a) => ({
+      id: a.user_id,
+      nama: (a.profil as unknown as { nama: string; tgl_lahir: string | null } | null)?.nama ?? "Anak",
+      tglLahir: (a.profil as unknown as { nama: string; tgl_lahir: string | null } | null)?.tgl_lahir ?? null,
+    }));
+  const anakTampil = rumah.peran === "anak"
+    ? semuaAnak.filter((anak) => anak.id === user.id)
+    : semuaAnak;
+  const anakIds = anakTampil.map((anak) => anak.id);
+  const [{ data: tugasAnak, error: tugasAnakError }, { data: buktiAnak, error: buktiAnakError }] =
+    anakIds.length
+      ? await Promise.all([
+          supabase.from("tantangan_harian")
+            .select("anak_id, mode, dilewati, tantangan:tantangan_slug (slug, judul, isi, kategori, menit, poin, peringatan)")
+            .eq("keluarga_id", rumah.id).eq("tanggal", hari).in("anak_id", anakIds),
+          supabase.from("bukti")
+            .select("anak_id, tantangan_slug, status")
+            .eq("keluarga_id", rumah.id).eq("tanggal", hari)
+            .in("anak_id", anakIds).in("status", ["menunggu", "disetujui", "ditandai"]),
+        ])
+      : [{ data: [], error: null }, { data: [], error: null }];
+  const tugasAnakDari = new Map((tugasAnak ?? []).map((item) => [item.anak_id, item]));
+  const buktiAnakDari = new Map((buktiAnak ?? []).map((item) => [`${item.anak_id}:${item.tantangan_slug}`, item.status]));
 
   const t = harian.data?.tantangan as unknown as
     | { slug: string; judul: string; isi: string; kategori: string; menit: number; poin: number; peringatan: string | null }
@@ -127,7 +162,98 @@ export default async function Halaman() {
           </span>
         </div>
 
-        {!t ? (
+        {daftarAnggota.error ? (
+          <p role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
+            Daftar anak di rumah belum bisa dimuat. Muat ulang halaman.
+          </p>
+        ) : anakTampil.length > 0 ? (
+          <section aria-labelledby="tantangan-anak" className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <h2 id="tantangan-anak" className="text-lg font-semibold">Tantangan tiap anak</h2>
+              <p className="text-muted">Setiap anak mendapat tantangan sesuai kelompok umurnya. Bukti tetap dinilai anggota keluarga lain.</p>
+            </div>
+            {tugasAnakError || buktiAnakError ? (
+              <p role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
+                Status tantangan anak belum bisa dimuat. Muat ulang halaman.
+              </p>
+            ) : anakTampil.map((anak) => {
+              const harianAnak = tugasAnakDari.get(anak.id);
+              const tantangan = harianAnak?.tantangan as unknown as
+                | { slug: string; judul: string; isi: string; kategori: string; menit: number; poin: number; peringatan: string | null }
+                | undefined;
+              const statusBukti = tantangan ? buktiAnakDari.get(`${anak.id}:${tantangan.slug}`) : null;
+              const segmen = segmenUsiaAnak(anak.tglLahir);
+              return (
+                <article key={anak.id} className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+                  <div className="flex flex-col gap-1">
+                    <h3 className="font-semibold">{anak.nama}</h3>
+                    <p className="text-sm text-muted">
+                      {segmen ? labelSegmen(segmen) : "Tantangan umum"}
+                    </p>
+                  </div>
+                  {!tantangan ? (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-muted">Pilih situasi agar tantangan hari ini sesuai dengan waktu yang tersedia.</p>
+                      <ModePilih keluargaId={rumah.id} anakId={anak.id} />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-2">
+                        <p className="text-sm text-muted">
+                          {labelKategori(tantangan.kategori)}, {tantangan.menit} menit, +{tantangan.poin} poin
+                        </p>
+                        <h4 className="text-lg font-semibold">{tantangan.judul}</h4>
+                        <p>{tantangan.isi}</p>
+                        {tantangan.peringatan ? <p className="font-semibold">{tantangan.peringatan}</p> : null}
+                      </div>
+                      {harianAnak?.dilewati ? (
+                        <p className="font-semibold">Dilewati hari ini.</p>
+                      ) : statusBukti === "disetujui" ? (
+                        <p className="font-semibold">Selesai dan disetujui. Poin sudah masuk.</p>
+                      ) : statusBukti ? (
+                        <p className="font-semibold">Bukti terkirim, menunggu penilaian anggota lain.</p>
+                      ) : (
+                        <TautanTombol
+                          href={`/tantangan/${tantangan.slug}?anak=${anak.id}`}
+                          variant="sekunder"
+                          className="self-start"
+                        >
+                          Kirim bukti untuk selesai
+                        </TautanTombol>
+                      )}
+                      {orangTua && !statusBukti ? (
+                        <div className="flex flex-wrap gap-3">
+                          <form action={aturTantangan}>
+                            <input type="hidden" name="keluarga_id" value={rumah.id} />
+                            <input type="hidden" name="anak_id" value={anak.id} />
+                            <input type="hidden" name="mode" value={harianAnak?.mode ?? "biasa"} />
+                            <input type="hidden" name="ganti" value="1" />
+                            <Tombol variant="sekunder">Ganti tantangan</Tombol>
+                          </form>
+                          {!harianAnak?.dilewati ? (
+                            <form action={lewatiTantangan}>
+                              <input type="hidden" name="keluarga_id" value={rumah.id} />
+                              <input type="hidden" name="anak_id" value={anak.id} />
+                              <Tombol variant="sekunder">Lewati hari ini</Tombol>
+                            </form>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {orangTua ? (
+                        <details className="rounded-lg border border-line p-3">
+                          <summary className="min-h-11 py-2 font-semibold">Ubah situasi hari ini</summary>
+                          <div className="pt-2">
+                            <ModePilih keluargaId={rumah.id} anakId={anak.id} aktif={harianAnak?.mode} />
+                          </div>
+                        </details>
+                      ) : null}
+                    </>
+                  )}
+                </article>
+              );
+            })}
+          </section>
+        ) : !t ? (
           <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4 sm:p-5">
             <div className="flex items-center gap-3">
               <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-aksen text-on-aksen">
@@ -295,13 +421,14 @@ export default async function Halaman() {
   );
 }
 
-function ModePilih({ keluargaId, aktif }: { keluargaId: string; aktif?: string }) {
+function ModePilih({ keluargaId, aktif, anakId }: { keluargaId: string; aktif?: string; anakId?: string }) {
   return (
     <ul className="flex flex-col gap-2">
       {MODE.map((m) => (
         <li key={m.nilai}>
           <form action={aturTantangan}>
             <input type="hidden" name="keluarga_id" value={keluargaId} />
+            {anakId ? <input type="hidden" name="anak_id" value={anakId} /> : null}
             <input type="hidden" name="mode" value={m.nilai} />
             <button
               type="submit"
