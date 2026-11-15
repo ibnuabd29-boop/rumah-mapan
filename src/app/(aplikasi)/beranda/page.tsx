@@ -4,7 +4,7 @@ import { FormBuatRumah } from "@/components/FormKeluarga";
 import { Kerangka } from "@/components/Kerangka";
 import { IkonFitur } from "@/components/IkonFitur";
 import { Tombol, TautanTombol } from "@/components/ui";
-import { ambilRingkasan, hariIniWib } from "@/lib/data";
+import { ambilRingkasan, formatTanggal, hariIniWib } from "@/lib/data";
 import { ambilSesi } from "@/lib/sesi";
 import {
   MODE,
@@ -62,7 +62,7 @@ export default async function Halaman() {
   const hari = hariIniWib();
   const mulaiMinggu = mundurHari(hari, 6);
   const orangTua = PERAN_ORTU.includes(rumah.peran);
-  const [ringkasan, harian, drive, checkinMinggu, daftarAnggota] = await Promise.all([
+  const [ringkasan, harian, drive, checkinMinggu, daftarAnggota, tantanganPin, lencanaPoin] = await Promise.all([
     ambilRingkasan(supabase, rumah.id),
     supabase
       .from("tantangan_harian")
@@ -75,6 +75,12 @@ export default async function Halaman() {
       .eq("keluarga_id", rumah.id).gte("tanggal", mulaiMinggu).lte("tanggal", hari),
     supabase.from("anggota").select("user_id, peran, profil:user_id (nama, tgl_lahir)")
       .eq("keluarga_id", rumah.id).order("bergabung_at", { ascending: true }),
+    supabase.from("tantangan")
+      .select("slug, judul, isi, tenggat")
+      .eq("dipin", true).eq("aktif", true).order("judul"),
+    supabase.from("lencana_poin")
+      .select("id, nama, ikon, target_poin")
+      .eq("aktif", true).order("target_poin").order("nama"),
   ]);
 
   const semuaAnak = (daftarAnggota.data ?? [])
@@ -142,6 +148,33 @@ export default async function Halaman() {
         <p role="note" className="rounded-lg border border-kayu px-3 py-2">
           Foto bukti baru tersedia setelah admin platform menghubungkan folder Google Drive.
         </p>
+      ) : null}
+      {tantanganPin.error ? (
+        <p role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
+          Tantangan yang dipin belum bisa dimuat. Muat ulang halaman.
+        </p>
+      ) : tantanganPin.data?.length ? (
+        <section aria-labelledby="tantangan-pin" className="flex flex-col gap-3 border-b border-line pb-5">
+          <div>
+            <h2 id="tantangan-pin" className="text-lg font-semibold">Tantangan pilihan</h2>
+            <p className="text-sm text-muted">Tantangan yang dipin admin tampil di bagian atas beranda.</p>
+          </div>
+          <ul className="divide-y divide-line border-y border-line">
+            {tantanganPin.data.map((item) => (
+              <li key={item.slug} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <h3 className="font-semibold">{item.judul}</h3>
+                  {item.tenggat ? (
+                    <p className="text-sm text-muted">Tenggat {formatTanggal(item.tenggat)}.</p>
+                  ) : null}
+                </div>
+                <TautanTombol href={`/tantangan/${item.slug}`} variant="sekunder" className="self-start">
+                  Buka tantangan
+                </TautanTombol>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <section aria-labelledby="hari-ini" className="flex flex-col gap-4">
@@ -415,7 +448,34 @@ export default async function Halaman() {
               <p className="text-sm">{l.syarat}</p>
             </li>
           ))}
+          {lencanaPoin.error ? (
+            <li role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
+              Lencana poin tambahan belum bisa dimuat. Muat ulang halaman.
+            </li>
+          ) : lencanaPoin.data?.map((item) => {
+            const terbuka = ringkasan.poin >= item.target_poin;
+            return (
+              <li
+                key={item.id}
+                className={`flex items-center gap-3 rounded-lg p-3 ${
+                  terbuka ? "border border-primary bg-surface" : "border border-dashed border-field text-muted"
+                }`}
+              >
+                <IkonFitur nama={item.ikon} className="size-6 shrink-0" />
+                <div>
+                  <p className="font-semibold">
+                    {item.nama}
+                    <span className="ml-2 text-sm font-normal">{terbuka ? "Terbuka" : "Terkunci"}</span>
+                  </p>
+                  <p className="text-sm">{item.target_poin} poin keluarga</p>
+                </div>
+              </li>
+            );
+          })}
         </ul>
+        <p className="text-sm text-muted">
+          Poin keluarga tetap bertambah setelah lencana terbuka dan menjadi total poin untuk event serta reward khusus.
+        </p>
       </section>
     </div>
   );

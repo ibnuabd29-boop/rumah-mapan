@@ -77,7 +77,7 @@ export function FormDaftar({ next }: { next: string }) {
           kebijakan privasi
         </a>
         . Saya paham admin platform bisa melihat bukti tantangan dan angka progres keluarga saya.
-        Admin tidak bisa membaca catatan harian anak.
+        Admin tidak bisa membaca catatan pribadi anak. Catatan yang dibagikan hanya terbaca orang tua atau wali di rumah yang sama.
       </Centang>
       <Pesan galat={hasil.galat} />
       <Tombol teksTunggu="Mendaftarkan...">Buat akun</Tombol>

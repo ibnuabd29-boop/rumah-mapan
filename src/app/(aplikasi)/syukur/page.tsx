@@ -18,13 +18,6 @@ export default async function Halaman() {
       </section>
     );
   }
-  const { data: admin, error: adminError } = await supabase.rpc("is_admin");
-  if (adminError) {
-    return <p role="alert" className="border border-bahaya p-3 text-bahaya">Status akun belum bisa diperiksa. Coba muat ulang halaman.</p>;
-  }
-  if (admin) {
-    return <p className="text-muted">Akun admin platform tidak dapat melihat atau menulis apresiasi keluarga.</p>;
-  }
   const [anggotaQuery, apresiasiQuery] = await Promise.all([
     supabase.from("anggota").select("user_id, profil:user_id (nama)").eq("keluarga_id", rumah.id),
     supabase.from("apresiasi").select("id, pengirim_id, penerima_id, isi, dibuat_at")

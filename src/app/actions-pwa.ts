@@ -57,9 +57,6 @@ export async function simpanLanggananPush(input: unknown): Promise<HasilPWA> {
   }
   const { supabase, user, rumah } = await ambilSesi();
   if (!rumah) return { galat: "Gabung ke rumah terlebih dahulu untuk mengaktifkan pengingat." };
-  const { data: admin, error: errorAdmin } = await supabase.rpc("is_admin");
-  if (errorAdmin) return { galat: "Status akun belum bisa diperiksa. Coba lagi." };
-  if (admin) return { galat: "Akun admin platform tidak dapat berlangganan pengingat keluarga." };
 
   const { error } = await supabase.from("pengingat_push").upsert(
     {

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:rls": "node --test tests/rls.test.mjs tests/bukti.test.mjs tests/admin.test.mjs tests/langkah-enam.test.mjs tests/langkah-tujuh.test.mjs"
+    "test:rls": "node --test tests/rls.test.mjs tests/bukti.test.mjs tests/admin.test.mjs tests/fitur.test.mjs tests/langkah-enam.test.mjs tests/langkah-tujuh.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

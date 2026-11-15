@@ -15,13 +15,14 @@ npm run test:rls             # uji migrasi dan RLS di Postgres lokal (pglite), t
 
 ## Menyiapkan Supabase
 
-1. Jalankan berurutan di SQL Editor (salin **seluruh isi** tiap file, bukan namanya): `supabase/migrations/0001_akun_keluarga.sql`, `0002_tantangan_bukti.sql`, `0003_isi_tantangan.sql`, `0004_admin.sql`, `0005_perasaan_catatan_masa_depan.sql`, `0006_pwa_pengingat.sql`, `0007_konten_admin.sql`, `0008_drive_admin_pusat.sql`.
-2. Migrasi `0007_konten_admin.sql` menambahkan pengelolaan tantangan, kartu obrolan, dan pertanyaan diskusi Materi GenRe. Tombol hapus mengarsipkan konten agar progres lama tetap ada. Kategori dan poin tantangan terkunci setelah bukti tercatat.
-3. Authentication > Providers > Email: aktifkan **Confirm email** dan set panjang kata sandi minimal 8.
-4. Authentication > Providers > Google: isi Client ID dan Secret dari Google Cloud.
-5. Authentication > URL Configuration: Site URL = alamat situs, Redirect URLs = `<alamat situs>/auth/callback`.
-6. Authentication > Rate Limits: atur batas percobaan masuk dan pengiriman email. Batas percobaan login ditegakkan di sini, bukan di kode aplikasi.
-7. Menjadikan seseorang admin platform (hanya lewat SQL, tidak ada jalur dari aplikasi):
+1. Jalankan berurutan di SQL Editor (salin **seluruh isi** tiap file, bukan namanya): `supabase/migrations/0001_akun_keluarga.sql`, `0002_tantangan_bukti.sql`, `0003_isi_tantangan.sql`, `0004_admin.sql`, `0005_perasaan_catatan_masa_depan.sql`, `0006_pwa_pengingat.sql`, `0007_konten_admin.sql`, `0008_drive_admin_pusat.sql`, `0009_tantangan_segmen_anak.sql`, `0010_fitur_tantangan_layanan.sql`, `0011_admin_fitur_pengguna.sql`.
+2. Admin platform yang menjadi anggota rumah dapat memakai fitur anggota sesuai peran dan hak yang sama. Akses catatan, check-in, dan data keluarga tetap dibatasi ke rumah tersebut; catatan pribadi anak tidak dibagikan.
+3. Migrasi `0007_konten_admin.sql` menambahkan pengelolaan tantangan, kartu obrolan, dan pertanyaan diskusi Materi GenRe. Tombol hapus mengarsipkan konten agar progres lama tetap ada. Kategori dan poin tantangan terkunci setelah bukti tercatat.
+4. Authentication > Providers > Email: aktifkan **Confirm email** dan set panjang kata sandi minimal 8.
+5. Authentication > Providers > Google: isi Client ID dan Secret dari Google Cloud.
+6. Authentication > URL Configuration: Site URL = alamat situs, Redirect URLs = `<alamat situs>/auth/callback`.
+7. Authentication > Rate Limits: atur batas percobaan masuk dan pengiriman email. Batas percobaan login ditegakkan di sini, bukan di kode aplikasi.
+8. Menjadikan seseorang admin platform (hanya lewat SQL, tidak ada jalur dari aplikasi):
 
 ```sql
 insert into platform_admins (user_id) values ('<uuid dari auth.users>');
@@ -50,6 +51,8 @@ Setelah deploy dan migrasi selesai, masuk sebagai admin platform dan hubungkan G
 - Manifest dan service worker membuat aplikasi bisa dipasang. Setelah service worker terpasang, aplikasi menyimpan materi dan pertanyaan aktif dari Supabase untuk dibaca luring. Cache diperbarui saat perangkat kembali daring. Catatan, progres, dan data keluarga tetap memerlukan internet.
 - Untuk mengaktifkan push, jalankan migrasi `0006_pwa_pengingat.sql`, lalu buat pasangan kunci dengan `npx web-push generate-vapid-keys`. Isi `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_CONTACT` (alamat surel operator berawalan `mailto:`), `CRON_SECRET` acak, dan `SUPABASE_SERVICE_ROLE_KEY` di environment server. Jangan bagikan kunci privat atau service role.
 - Jadwalkan `GET /api/cron/pengingat` setiap menit dengan header `Authorization: Bearer <CRON_SECRET>` untuk mengirim notifikasi pada waktu pilihan tiap perangkat. Endpoint memakai window lima menit dan klaim baris agar panggilan jadwal tidak mengirim notifikasi ganda. Vercel Hobby hanya mengizinkan Cron sekali sehari; jadwal per menit perlu Vercel Pro atau scheduler eksternal.
+- Migrasi `0010_fitur_tantangan_layanan.sql` menambahkan sasaran keluarga, pin dan tenggat tantangan, lencana poin kustom, antrean push untuk tantangan baru/pin/tenggat, serta layanan pengguna. Pengingat tenggat dijadwalkan sehari sebelumnya pukul 09.00 WIB. Pengaduan kesehatan mental hanya dapat dibaca pengirim dan akun psikolog yang ditetapkan pada `layanan_konselor`; penetapan akun konselor/psikolog dilakukan melalui service role.
+- Pengguna harus mengaktifkan push di Akun agar menerima notifikasi tantangan baru, tenggat, dan pin. Pengiriman mengikuti scheduler yang sama dengan pengingat harian.
 - Atur `PENGINGAT_SCHEDULED=true` hanya setelah scheduler aktif. Sampai semua environment dan scheduler tersedia, pengingat push tidak aktif. Pengguna tetap dapat memasang aplikasi dan membaca materi serta kartu obrolan luring.
 
 ## Uji

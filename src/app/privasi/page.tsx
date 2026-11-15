@@ -30,7 +30,8 @@ export default function Halaman() {
         <li>Materi, catatan, cita-cita, dan apresiasi keluarga hanya tersedia untuk anggota rumah yang sama sesuai hak akses masing-masing.</li>
         <li>
           Admin platform bisa melihat bukti, angka progres, tren check-in keluarga, dan tanda perhatian tanpa nilai suasana hati anak.
-          Admin hanya melihat jumlah dan tanggal catatan harian, bukan isinya. Setiap akses admin dicatat.
+          Admin tidak mendapat akses ke catatan pribadi. Jika admin menjadi anggota rumah, haknya atas check-in dan catatan yang dibagikan sama seperti anggota lain di rumah itu.
+          Di luar rumah yang diikuti admin, isi check-in dan catatan tetap tidak dapat dibaca admin. Setiap akses admin dicatat.
         </li>
       </ul>
 

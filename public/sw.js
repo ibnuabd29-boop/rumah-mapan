@@ -93,7 +93,7 @@ self.addEventListener("push", (event) => {
       body: data.body,
       icon: "/ikon-rumah-mapan.svg",
       badge: "/ikon-rumah-mapan.svg",
-      tag: "tantangan-harian",
+      tag: data.tag || "tantangan-harian",
       data: { url: data.url || "/beranda" },
     }),
   );

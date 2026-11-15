@@ -12,6 +12,7 @@ const MENU = [
   { href: "/admin/pengguna", label: "Pengguna" },
   { href: "/admin/bukti", label: "Bukti" },
   { href: "/admin/audit", label: "Audit" },
+  { href: "/admin/layanan", label: "Kritik & saran" },
 ];
 
 export function NavAdmin() {

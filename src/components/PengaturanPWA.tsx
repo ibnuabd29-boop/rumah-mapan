@@ -222,7 +222,7 @@ export function PengaturanPWA({
 
       <h2 className="pt-2 text-lg font-semibold">Pengingat tantangan</h2>
       <p className="text-sm text-muted">
-        Pilih waktu setempat. Notifikasi push dikirim selama perangkat dan layanan jadwal mendukungnya.
+        Pilih waktu setempat untuk pengingat harian. Jika notifikasi aktif, tantangan baru, tenggat, dan tantangan yang dipin juga dapat dikirim ke perangkat.
       </p>
       {pengingatSiap && (
         <div className="flex flex-col gap-1">

@@ -19,6 +19,13 @@ const GALAT: Record<string, string> = {
   kategori_tidak_valid: "Pilih kategori tantangan yang tersedia.",
   segmen_tidak_valid: "Pilih segmen umur yang tersedia.",
   peringatan_tidak_valid: "Peringatan maksimal 500 karakter.",
+  sasaran_tidak_valid: "Pilih semua keluarga atau satu keluarga atau lebih yang tersedia.",
+  tenggat_tidak_valid: "Tenggat tidak boleh berada di masa lalu.",
+  nama_lencana_tidak_valid: "Nama lencana harus berisi 3 sampai 60 karakter.",
+  ikon_lencana_tidak_valid: "Pilih ikon lencana yang tersedia.",
+  target_poin_tidak_valid: "Target poin harus antara 1 dan 1.000.000.",
+  status_lencana_tidak_valid: "Status lencana tidak valid.",
+  lencana_tidak_ada: "Lencana tidak ditemukan.",
   slug_sudah_dipakai: "ID tantangan sudah digunakan. Ubah judul lalu coba lagi.",
   tantangan_tidak_ada: "Tantangan tidak ditemukan.",
   tantangan_terakhir_kategori: "Tantangan terakhir pada kategori ini tidak dapat diarsipkan.",
@@ -85,6 +92,7 @@ function buatSlug(judul: string) {
 }
 
 export async function simpanTantanganAdmin(_: HasilA, data: FormData): Promise<HasilA> {
+  const raw = Object.fromEntries(data);
   const v = z.object({
     slug: z.string().max(80).optional(),
     kategori: kategoriTantangan,
@@ -95,12 +103,22 @@ export async function simpanTantanganAdmin(_: HasilA, data: FormData): Promise<H
     menit: z.coerce.number().int().min(3).max(120),
     poin: z.coerce.number().int().min(5).max(30),
     peringatan: z.string().max(500).optional(),
-  }).safeParse(Object.fromEntries(data));
+    dipin: z.boolean(),
+    tenggat: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+    untuk_semua: z.boolean(),
+    keluarga_ids: z.array(z.string().uuid()),
+  }).safeParse({
+    ...raw,
+    dipin: data.get("dipin") === "true",
+    tenggat: typeof raw.tenggat === "string" && raw.tenggat ? raw.tenggat : null,
+    untuk_semua: data.get("untuk_semua") === "true",
+    keluarga_ids: data.getAll("keluarga_ids"),
+  });
   if (!v.success) return { galat: "Periksa kembali isian tantangan." };
 
   const slug = v.data.slug?.trim() || buatSlug(v.data.judul);
   const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("admin_simpan_tantangan", {
+  const { error } = await supabase.rpc("admin_simpan_tantangan_lanjutan", {
     p_slug: slug,
     p_kategori: v.data.kategori,
     p_segmen: v.data.segmen,
@@ -109,6 +127,10 @@ export async function simpanTantanganAdmin(_: HasilA, data: FormData): Promise<H
     p_menit: v.data.menit,
     p_poin: v.data.poin,
     p_peringatan: v.data.peringatan?.trim() || null,
+    p_dipin: v.data.dipin,
+    p_tenggat: v.data.tenggat,
+    p_untuk_semua: v.data.untuk_semua,
+    p_keluarga_ids: v.data.keluarga_ids,
   });
   if (error) return { galat: pesanGalat(error) };
 
@@ -155,7 +177,7 @@ export async function statusTantanganAdmin(_: HasilA, data: FormData): Promise<H
   if (!v.success) return { galat: "Status tantangan tidak valid." };
 
   const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("admin_status_tantangan", {
+  const { error } = await supabase.rpc("admin_status_tantangan_lanjutan", {
     p_slug: v.data.slug,
     p_aktif: v.data.aktif,
   });
@@ -165,6 +187,32 @@ export async function statusTantanganAdmin(_: HasilA, data: FormData): Promise<H
   revalidatePath("/tantangan");
   revalidatePath("/beranda");
   return { ok: v.data.aktif ? "Tantangan diaktifkan." : "Tantangan diarsipkan." };
+}
+
+export async function simpanLencanaAdmin(_: HasilA, data: FormData): Promise<HasilA> {
+  const v = z.object({
+    id: z.string().optional().transform((id) => id || null).pipe(z.string().uuid().nullable()),
+    nama: z.string().trim().min(3).max(60),
+    ikon: z.enum(["keluarga", "tantangan", "perasaan", "syukur", "materi"]),
+    target_poin: z.coerce.number().int().min(1).max(1_000_000),
+    aktif: z.enum(["true", "false"]).transform((aktif) => aktif === "true"),
+  }).safeParse(Object.fromEntries(data));
+  if (!v.success) return { galat: "Periksa kembali isian lencana." };
+
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("admin_simpan_lencana", {
+    p_id: v.data.id,
+    p_nama: v.data.nama,
+    p_ikon: v.data.ikon,
+    p_target_poin: v.data.target_poin,
+    p_aktif: v.data.aktif,
+  });
+  if (error) return { galat: pesanGalat(error) };
+
+  revalidatePath("/admin/konten");
+  revalidatePath("/beranda");
+  revalidatePath("/admin/keluarga");
+  return { ok: "Lencana disimpan." };
 }
 
 export async function statusPertanyaanAdmin(_: HasilA, data: FormData): Promise<HasilA> {

@@ -24,6 +24,12 @@ const BAGIAN = [
       ["/akun", "Akun", "Nama, tema, sesi, dan penghapusan akun.", "akun", "kayu"],
     ],
   },
+  {
+    judul: "Dukungan",
+    tautan: [
+      ["/layanan", "Layanan keluarga", "Kritik dan saran, dukungan kesehatan mental, serta konselor sebaya.", "obrolan", "kayu"],
+    ],
+  },
 ] as const;
 
 const WARNA_IKON = {

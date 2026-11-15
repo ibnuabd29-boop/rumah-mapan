@@ -3,6 +3,7 @@ import Link from "next/link";
 import { hariIniWib } from "@/lib/data";
 import { ambilSesi } from "@/lib/sesi";
 import { KATEGORI, labelKategori, labelSegmen, segmenUsiaAnak } from "@/lib/tantangan";
+import { formatTanggal } from "@/lib/data";
 
 export const metadata: Metadata = { title: "Tantangan" };
 
@@ -26,8 +27,8 @@ export default async function Halaman({ searchParams }: PageProps<"/tantangan">)
     : daftarAnak.find((a) => a.id === anakId);
   const segmen = anakDipilih ? segmenUsiaAnak(anakDipilih.tglLahir) : null;
 
-  let q = supabase.from("tantangan").select("slug, kategori, segmen, judul, isi, menit, poin")
-    .eq("aktif", true).order("kategori").order("judul");
+  let q = supabase.from("tantangan").select("slug, kategori, segmen, judul, isi, menit, poin, dipin, tenggat")
+    .eq("aktif", true).order("dipin", { ascending: false }).order("kategori").order("judul");
   if (kategori) q = q.eq("kategori", kategori);
   q = segmen
     ? q.or(`segmen.is.null,segmen.eq.${segmen}`)
@@ -144,10 +145,12 @@ export default async function Halaman({ searchParams }: PageProps<"/tantangan">)
               <li key={t.slug} className="flex items-start justify-between gap-3 py-4">
                 <div className="min-w-0">
                   <h2 className="text-base font-semibold">{t.judul}</h2>
+                  {t.dipin ? <p className="text-sm font-semibold text-primary">Dipin admin</p> : null}
                   <p className="text-muted">{t.isi}</p>
                   <p className="text-sm text-muted">
                     {labelKategori(t.kategori)}, {labelSegmen(t.segmen)}, {t.menit} menit, +{t.poin} poin
                   </p>
+                  {t.tenggat ? <p className="text-sm text-muted">Tenggat {formatTanggal(t.tenggat)}.</p> : null}
                 </div>
                 {rumah ? (
                   s ? (

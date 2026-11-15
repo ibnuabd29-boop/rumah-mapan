@@ -17,7 +17,6 @@ const materiSlug = z.enum([
 function pesanGalat(message: string) {
   const pesan: Record<string, string> = {
     bukan_anggota: "Anda bukan anggota rumah ini.",
-    admin_tidak_mengisi: "Akun admin platform tidak dapat mengisi data pribadi keluarga.",
     langkah_tidak_ditemukan: "Langkah ini tidak ditemukan di rumah Anda.",
     materi_tidak_ditemukan: "Materi tidak ditemukan.",
     duplicate: "Data belum tersimpan. Periksa kembali lalu coba lagi.",
@@ -34,9 +33,6 @@ async function konteksRumah() {
   const sesi = await ambilSesi();
   const rumah = sesi.rumah;
   if (!rumah) return { galat: "Buat atau gabung ke rumah sebelum memakai fitur ini." } as const;
-  const { data: admin, error } = await sesi.supabase.rpc("is_admin");
-  if (error) return { galat: "Status akun belum bisa diperiksa. Coba lagi." } as const;
-  if (admin) return { galat: "Akun admin platform tidak dapat mengisi data pribadi keluarga." } as const;
   return { supabase: sesi.supabase, sesi, rumah } as const;
 }
 

@@ -64,14 +64,6 @@ export default async function Halaman() {
       </section>
     );
   }
-  const { data: admin, error: adminError } = await supabase.rpc("is_admin");
-  if (adminError) {
-    return <p role="alert" className="border border-bahaya p-3 text-bahaya">Status akun belum bisa diperiksa. Coba muat ulang halaman.</p>;
-  }
-  if (admin) {
-    return <p className="text-muted">Akun admin platform tidak dapat melihat check-in pribadi keluarga.</p>;
-  }
-
   const hariIni = hariIniWib();
   const awal = mundurHari(hariIni, 6);
   const [hariIniQuery, anggotaQuery, mingguQuery] = await Promise.all([
