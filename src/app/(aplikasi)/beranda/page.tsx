@@ -8,7 +8,6 @@ import { ambilRingkasan, formatTanggal, hariIniWib } from "@/lib/data";
 import { ambilSesi } from "@/lib/sesi";
 import {
   MODE,
-  daftarLencana,
   labelKategori,
   labelSegmen,
   segmenUsiaAnak,
@@ -33,6 +32,13 @@ type LencanaPoin = {
   poin_minimum: number;
   poin_maksimum: number;
   berlaku_sampai: string | null;
+  terbuka: boolean;
+};
+type LencanaKeluarga = {
+  slug: string;
+  nama: string;
+  ikon: "keluarga" | "tantangan" | "perasaan" | "syukur" | "materi";
+  syarat: string;
   terbuka: boolean;
 };
 
@@ -77,23 +83,34 @@ export default async function Halaman() {
   const hari = hariIniWib();
   const mulaiMinggu = mundurHari(hari, 6);
   const orangTua = PERAN_ORTU.includes(rumah.peran);
-  const [ringkasan, harian, drive, checkinMinggu, daftarAnggota, tantanganPin, lencanaPoin] = await Promise.all([
+  const peranTargetTantangan = ["ayah", "ibu", "anak"].includes(rumah.peran) ? rumah.peran : null;
+  const queryHarian = supabase
+    .from("tantangan_harian")
+    .select("mode, dilewati, tantangan:tantangan_slug (slug, judul, isi, kategori, menit, poin, peringatan)")
+    .eq("keluarga_id", rumah.id)
+    .eq("tanggal", hari);
+  const harianPromise = rumah.peran === "anak"
+    ? queryHarian.eq("anak_id", user.id).maybeSingle()
+    : queryHarian.is("anak_id", null).eq("peran_penugasan", rumah.peran).maybeSingle();
+  const queryTantanganPin = supabase.from("tantangan")
+    .select("slug, judul, isi, tenggat, peran_target")
+    .eq("dipin", true).eq("aktif", true).order("judul");
+  if (peranTargetTantangan) {
+    queryTantanganPin.or(`peran_target.is.null,peran_target.eq.${peranTargetTantangan}`);
+  } else {
+    queryTantanganPin.is("peran_target", null);
+  }
+  const [ringkasan, harian, drive, checkinMinggu, daftarAnggota, tantanganPin, lencanaPoin, lencanaKeluarga] = await Promise.all([
     ambilRingkasan(supabase, rumah.id),
-    supabase
-      .from("tantangan_harian")
-      .select("mode, dilewati, tantangan:tantangan_slug (slug, judul, isi, kategori, menit, poin, peringatan)")
-      .eq("keluarga_id", rumah.id)
-      .eq("tanggal", hari)
-      .maybeSingle(),
+    harianPromise,
     supabase.rpc("status_drive_pusat", { p_keluarga: rumah.id }),
     supabase.from("checkin_perasaan").select("suasana")
       .eq("keluarga_id", rumah.id).gte("tanggal", mulaiMinggu).lte("tanggal", hari),
     supabase.from("anggota").select("user_id, peran, profil:user_id (nama, tgl_lahir)")
       .eq("keluarga_id", rumah.id).order("bergabung_at", { ascending: true }),
-    supabase.from("tantangan")
-      .select("slug, judul, isi, tenggat")
-      .eq("dipin", true).eq("aktif", true).order("judul"),
+    queryTantanganPin,
     supabase.rpc("daftar_lencana_keluarga", { p_keluarga: rumah.id }),
+    supabase.rpc("daftar_lencana_keluarga_bawaan", { p_keluarga: rumah.id }),
   ]);
 
   const semuaAnak = (daftarAnggota.data ?? [])
@@ -125,19 +142,21 @@ export default async function Halaman() {
   const t = harian.data?.tantangan as unknown as
     | { slug: string; judul: string; isi: string; kategori: string; menit: number; poin: number; peringatan: string | null }
     | undefined;
-  const { data: buktiHariIni } = t
-    ? await supabase
-        .from("bukti")
+  const queryBuktiHariIni = t
+    ? supabase.from("bukti")
         .select("status")
         .eq("keluarga_id", rumah.id)
         .eq("tantangan_slug", t.slug)
         .eq("tanggal", hari)
         .in("status", ["menunggu", "disetujui", "ditandai"])
-        .maybeSingle()
+    : null;
+  const { data: buktiHariIni } = queryBuktiHariIni
+    ? rumah.peran === "anak"
+      ? await queryBuktiHariIni.eq("anak_id", user.id).maybeSingle()
+      : await queryBuktiHariIni.is("anak_id", null).maybeSingle()
     : { data: null };
 
   const tahap = tahapRumah(ringkasan.poin);
-  const lencana = daftarLencana(ringkasan);
   const kategoriTop = Object.entries(ringkasan.kategori_7hari ?? {}).sort((a, b) => b[1] - a[1])[0];
   const modeAktif = MODE.find((m) => m.nilai === harian.data?.mode);
   const pilihanMinggu = checkinMinggu.data ?? [];
@@ -208,9 +227,64 @@ export default async function Halaman() {
           </span>
         </div>
 
+        {((orangTua && (daftarAnggota.error || anakTampil.length > 0))
+          || (rumah.peran === "anak" && daftarAnggota.error)) ? (
+          <article className="flex flex-col gap-4 rounded-2xl border border-on-aksen/10 bg-aksen p-5 text-on-aksen shadow-sm">
+            {!t ? (
+              <>
+                <h2 className="text-lg font-semibold">{orangTua ? "Tantangan untuk Anda" : "Situasi hari ini"}</h2>
+                <p>Pilih situasi agar tantangan hari ini sesuai dengan waktu yang tersedia.</p>
+                <ModePilih keluargaId={rumah.id} anakId={rumah.peran === "anak" ? user.id : undefined} />
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-1">
+                  <p className="font-semibold">{orangTua ? "Tantangan untuk Anda" : "Tantangan hari ini"}</p>
+                  <p className="text-sm">
+                    {labelKategori(t.kategori)}, {t.menit} menit, +{t.poin} poin
+                    {modeAktif && modeAktif.nilai !== "biasa" ? `, ${modeAktif.label.toLowerCase()}` : ""}
+                  </p>
+                  <h2 className="text-xl font-semibold">{t.judul}</h2>
+                  <p>{t.isi}</p>
+                  {t.peringatan ? <p className="font-semibold">{t.peringatan}</p> : null}
+                </div>
+                {harian.data?.dilewati ? (
+                  <p className="font-semibold">Dilewati hari ini.</p>
+                ) : buktiHariIni?.status === "disetujui" ? (
+                  <p className="font-semibold">Selesai dan disetujui. Poin sudah masuk.</p>
+                ) : buktiHariIni ? (
+                  <p className="font-semibold">Bukti terkirim, menunggu penilaian anggota lain.</p>
+                ) : (
+                  <TautanTombol href={`/tantangan/${t.slug}`} variant="gelapPadaAksen" className="self-start">
+                    Kirim bukti untuk selesai
+                  </TautanTombol>
+                )}
+                {orangTua && !buktiHariIni ? (
+                  <div className="flex flex-wrap gap-3">
+                    <form action={aturTantangan}>
+                      <input type="hidden" name="keluarga_id" value={rumah.id} />
+                      <input type="hidden" name="mode" value={harian.data?.mode ?? "biasa"} />
+                      <input type="hidden" name="ganti" value="1" />
+                      <Tombol variant="padaAksen">Ganti tantangan</Tombol>
+                    </form>
+                    {!harian.data?.dilewati ? (
+                      <form action={lewatiTantangan}>
+                        <input type="hidden" name="keluarga_id" value={rumah.id} />
+                        <Tombol variant="padaAksen">Lewati hari ini</Tombol>
+                      </form>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </article>
+        ) : null}
+
         {daftarAnggota.error ? (
           <p role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
-            Daftar anak di rumah belum bisa dimuat. Muat ulang halaman.
+            {rumah.peran === "anak"
+              ? "Daftar anggota keluarga belum bisa dimuat. Bagian tantangan pribadi tetap tersedia di atas."
+              : "Daftar anak di rumah belum bisa dimuat. Muat ulang halaman."}
           </p>
         ) : anakTampil.length > 0 ? (
           <section aria-labelledby="tantangan-anak" className="flex flex-col gap-4">
@@ -234,7 +308,7 @@ export default async function Halaman() {
                   <div className="flex flex-col gap-1">
                     <h3 className="font-semibold">{anak.nama}</h3>
                     <p className="text-sm text-muted">
-                      {segmen ? labelSegmen(segmen) : "Tantangan umum"}
+                      Kelompok usia: {labelSegmen(segmen)}
                     </p>
                   </div>
                   {!tantangan ? (
@@ -447,18 +521,27 @@ export default async function Halaman() {
           Lencana keluarga
         </h2>
         <ul className="flex flex-col gap-2">
-          {lencana.map((l) => (
+          {lencanaKeluarga.error ? (
+            <li role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
+              Lencana keluarga belum bisa dimuat. Muat ulang halaman.
+            </li>
+          ) : ((lencanaKeluarga.data ?? []) as LencanaKeluarga[]).map((l) => (
             <li
-              key={l.id}
+              key={l.slug}
               className={`rounded-lg p-3 ${
                 l.terbuka ? "border border-primary bg-surface" : "border border-dashed border-field text-muted"
               }`}
             >
-              <p className="font-semibold">
-                {l.nama}
-                <span className="ml-2 text-sm font-normal">{l.terbuka ? "Terbuka" : "Terkunci"}</span>
-              </p>
-              <p className="text-sm">{l.syarat}</p>
+              <div className="flex items-center gap-3">
+                <IkonFitur nama={l.ikon} className="size-6 shrink-0" />
+                <div>
+                  <p className="font-semibold">
+                    {l.nama}
+                    <span className="ml-2 text-sm font-normal">{l.terbuka ? "Terbuka" : "Terkunci"}</span>
+                  </p>
+                  <p className="text-sm">{l.syarat}</p>
+                </div>
+              </div>
             </li>
           ))}
           {lencanaPoin.error ? (

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { supabaseServer } from "@/lib/supabase/server";
+import { waktuWibKeISO } from "@/lib/waktu-wib";
 
 export type HasilA = { galat?: string; ok?: string };
 
@@ -28,6 +29,8 @@ const GALAT: Record<string, string> = {
   poin_maksimum_tidak_valid: "Poin maksimum harus sama atau lebih besar dari minimum, hingga 1.000.000.",
   status_lencana_tidak_valid: "Status lencana tidak valid.",
   lencana_tidak_ada: "Lencana tidak ditemukan.",
+  target_tidak_valid: "Target syarat harus antara 1 dan 1.000.000.",
+  syarat_lencana_tidak_valid: "Syarat lencana tidak valid.",
   slug_sudah_dipakai: "ID tantangan sudah digunakan. Ubah judul lalu coba lagi.",
   tantangan_tidak_ada: "Tantangan tidak ditemukan.",
   tantangan_terakhir_kategori: "Tantangan terakhir pada kategori ini tidak dapat diarsipkan.",
@@ -231,30 +234,68 @@ export async function simpanLencanaAdmin(_: HasilA, data: FormData): Promise<Has
   return { ok: "Lencana disimpan." };
 }
 
-function waktuWibKeISO(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-  if (!match) return null;
+const ikonLencana = z.enum(["keluarga", "tantangan", "perasaan", "syukur", "materi"]);
 
-  const [, tahunTeks, bulanTeks, hariTeks, jamTeks, menitTeks] = match;
-  const tahun = Number(tahunTeks);
-  const bulan = Number(bulanTeks);
-  const hari = Number(hariTeks);
-  const jam = Number(jamTeks);
-  const menit = Number(menitTeks);
-  const waktuDinding = new Date(0);
-  waktuDinding.setUTCFullYear(tahun, bulan - 1, hari);
-  waktuDinding.setUTCHours(jam, menit, 0, 0);
-  if (
-    waktuDinding.getUTCFullYear() !== tahun
-    || waktuDinding.getUTCMonth() !== bulan - 1
-    || waktuDinding.getUTCDate() !== hari
-    || jam > 23
-    || menit > 59
+function nullableInteger(min: number, max: number) {
+  return z.string().optional()
+    .transform((value) => value?.trim() ? Number(value) : null)
+    .pipe(z.number().int().min(min).max(max).nullable());
+}
+
+export async function simpanLencanaKeluargaAdmin(_: HasilA, data: FormData): Promise<HasilA> {
+  const v = z.object({
+    slug: z.enum(["langkah-pertama", "seminggu", "tim-solid", "pendengar", "atap"]),
+    nama: z.string().trim().min(3).max(60),
+    ikon: ikonLencana,
+    target: nullableInteger(1, 1_000_000),
+    poin_minimum: nullableInteger(1, 1_000_000),
+    poin_maksimum: nullableInteger(1, 1_000_000),
+    berlaku_sampai: z.string().optional().transform((value) => value?.trim() || null),
+    aktif: z.enum(["true", "false"]).transform((aktif) => aktif === "true"),
+  }).safeParse(Object.fromEntries(data));
+  if (!v.success) return { galat: "Periksa kembali isian lencana." };
+
+  const berbasisPoin = v.data.slug === "atap";
+  if (berbasisPoin) {
+    if (v.data.target !== null || v.data.poin_minimum === null || v.data.poin_maksimum === null) {
+      return { galat: "Isi poin minimum dan maksimum lencana." };
+    }
+    if (v.data.poin_maksimum < v.data.poin_minimum) {
+      return { galat: "Poin maksimum harus sama atau lebih besar dari minimum." };
+    }
+  } else if (
+    v.data.target === null
+    || v.data.poin_minimum !== null
+    || v.data.poin_maksimum !== null
+    || v.data.berlaku_sampai
   ) {
-    return null;
+    return { galat: "Periksa kembali target syarat lencana." };
   }
 
-  return new Date(waktuDinding.getTime() - 7 * 60 * 60 * 1000).toISOString();
+  const berlakuSampai = v.data.berlaku_sampai
+    ? waktuWibKeISO(v.data.berlaku_sampai)
+    : null;
+  if (v.data.berlaku_sampai && !berlakuSampai) {
+    return { galat: "Masukkan tanggal dan waktu akhir yang valid." };
+  }
+
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("admin_simpan_lencana_bawaan", {
+    p_slug: v.data.slug,
+    p_nama: v.data.nama,
+    p_ikon: v.data.ikon,
+    p_target: v.data.target,
+    p_poin_minimum: v.data.poin_minimum,
+    p_poin_maksimum: v.data.poin_maksimum,
+    p_berlaku_sampai: berlakuSampai,
+    p_aktif: v.data.aktif,
+  });
+  if (error) return { galat: pesanGalat(error) };
+
+  revalidatePath("/admin/lencana");
+  revalidatePath("/beranda");
+  revalidatePath("/admin/keluarga");
+  return { ok: "Lencana keluarga disimpan." };
 }
 
 export async function statusPertanyaanAdmin(_: HasilA, data: FormData): Promise<HasilA> {

@@ -16,12 +16,18 @@ export default async function Halaman({ params, searchParams }: PageProps<"/tant
 
   const { data: t } = await supabase
     .from("tantangan")
-    .select("slug, kategori, segmen, judul, isi, menit, poin, peringatan, aktif")
+    .select("slug, kategori, segmen, judul, isi, menit, poin, peringatan, aktif, peran_target")
     .eq("slug", slug)
     .maybeSingle();
   if (!t) notFound();
 
   const anakId = rumah.peran === "anak" ? user.id : typeof sp.anak === "string" ? sp.anak : null;
+  const peranPengirim = anakId
+    ? "anak"
+    : ["ayah", "ibu"].includes(rumah.peran)
+      ? rumah.peran
+      : null;
+  if (t.peran_target && t.peran_target !== peranPengirim) notFound();
   const { data: anggotaAnak } = anakId && rumah.peran !== "anak"
     ? await supabase.from("anggota").select("user_id, peran, profil:user_id (tgl_lahir)")
         .eq("keluarga_id", rumah.id).eq("user_id", anakId).eq("peran", "anak").maybeSingle()
@@ -41,7 +47,7 @@ export default async function Halaman({ params, searchParams }: PageProps<"/tant
     .eq("tanggal", hariIniWib())
     .order("dibuat_at", { ascending: false })
     .limit(1);
-  if (anakId) queryBukti.or(`anak_id.is.null,anak_id.eq.${anakId}`);
+  if (anakId) queryBukti.eq("anak_id", anakId);
   else queryBukti.is("anak_id", null);
 
   const queryTugas = t.aktif
@@ -52,7 +58,8 @@ export default async function Halaman({ params, searchParams }: PageProps<"/tant
             .eq("tantangan_slug", slug).eq("anak_id", anakId).maybeSingle()
         : supabase.from("tantangan_harian").select("tantangan_slug")
             .eq("keluarga_id", rumah.id).eq("tanggal", hariIniWib())
-            .eq("tantangan_slug", slug).is("anak_id", null).maybeSingle());
+            .eq("tantangan_slug", slug).is("anak_id", null)
+            .eq("peran_penugasan", rumah.peran).maybeSingle());
   const [{ data: ada }, { data: drive, error: driveError }, { data: tugasHariIni, error: tugasError }] = await Promise.all([
     queryBukti,
     supabase.rpc("status_drive_pusat", { p_keluarga: rumah.id }),

@@ -35,6 +35,8 @@ for (const migrasi of [
   "0010_fitur_tantangan_layanan",
   "0011_admin_fitur_pengguna",
   "0012_lencana_rentang_masa",
+  "0013_lencana_keluarga_admin",
+  "0014_tantangan_sesuai_peran",
 ]) {
   await db.exec(readFileSync(`supabase/migrations/${migrasi}.sql`, "utf8"));
 }
@@ -60,9 +62,19 @@ const admin = await user("admin@contoh.test", "Admin");
 const keluargaSatu = await user("satu@contoh.test", "Keluarga Satu");
 const keluargaDua = await user("dua@contoh.test", "Keluarga Dua");
 const psikolog = await user("psikolog@contoh.test", "Psikolog");
+const ibu = await user("ibu@contoh.test", "Ibu");
+const anak = await user("anak@contoh.test", "Anak");
+const wali = await user("wali@contoh.test", "Wali");
 await db.exec(`insert into platform_admins (user_id) values ('${admin}')`);
 const rumahSatu = (await as(keluargaSatu, `select buat_keluarga('Rumah Satu', 'ayah') as id`)).rows[0].id;
 const rumahDua = (await as(keluargaDua, `select buat_keluarga('Rumah Dua', 'ayah') as id`)).rows[0].id;
+const rumahWali = (await as(wali, `select buat_keluarga('Rumah Wali', 'wali') as id`)).rows[0].id;
+await db.exec(`
+  insert into anggota (keluarga_id, user_id, peran)
+  values ('${rumahSatu}', '${ibu}', 'ibu'), ('${rumahSatu}', '${anak}', 'anak');
+  update profiles set tgl_lahir = (public.hari_ini() - interval '12 years')::date
+  where id = '${anak}'
+`);
 const cerita = "Kami bercerita tentang hari ini dan saling mendengarkan dengan tenang";
 
 async function simpanTantangan(slug, judul, keluargaIds, dipin = false, tenggat = null) {
@@ -73,6 +85,60 @@ async function simpanTantangan(slug, judul, keluargaIds, dipin = false, tenggat 
     )
   `, [slug, judul, dipin, tenggat, keluargaIds]);
 }
+
+test("tantangan harian mengikuti peran ayah, ibu, dan anak", async () => {
+  const tugasAyah = (await as(keluargaSatu, `
+    select atur_tantangan_hari_ini($1, 'biasa', false) as slug
+  `, [rumahSatu])).rows[0].slug;
+  const tugasIbu = (await as(ibu, `
+    select atur_tantangan_hari_ini($1, 'biasa', false) as slug
+  `, [rumahSatu])).rows[0].slug;
+  const tugasAnak = (await as(anak, `
+    select atur_tantangan_hari_ini($1, 'biasa', false, $2) as slug
+  `, [rumahSatu, anak])).rows[0].slug;
+  const sasaran = await db.query(`
+    select slug, peran_target from tantangan where slug = any($1::text[])
+  `, [[tugasAyah, tugasIbu, tugasAnak]]);
+  const sasaranPeran = new Map(sasaran.rows.map((row) => [row.slug, row.peran_target]));
+
+  assert.equal(sasaranPeran.get(tugasAyah), "ayah");
+  assert.equal(sasaranPeran.get(tugasIbu), "ibu");
+  assert.equal(sasaranPeran.get(tugasAnak), "anak");
+  assert.notEqual(tugasAyah, tugasIbu);
+  assert.notEqual(tugasAyah, tugasAnak);
+  assert.notEqual(tugasIbu, tugasAnak);
+  const tugasWali = (await as(wali, `
+    select atur_tantangan_hari_ini($1, 'biasa', false) as slug
+  `, [rumahWali])).rows[0].slug;
+  const detailAnak = (await db.query(`
+    select segmen from tantangan where slug = $1
+  `, [tugasAnak])).rows[0];
+  assert.ok(detailAnak.segmen === null || detailAnak.segmen === "berani");
+  assert.equal((await db.query(`select peran_target from tantangan where slug=$1`, [tugasWali])).rows[0].peran_target, null);
+  await assert.rejects(as(ibu, `
+    select kirim_bukti($1, 'ayah-mendengar-cerita', 'cerita', $2, $3, null)
+  `, [rumahSatu, cerita, "d".repeat(64)]), /tantangan_tidak_sesuai_peran/);
+  await assert.rejects(as(anak, `
+    select kirim_bukti($1, 'ayah-mendengar-cerita', 'cerita', $2, $3, null)
+  `, [rumahSatu, cerita, "e".repeat(64)]), /tantangan_tidak_sesuai_peran/);
+  await assert.rejects(as(keluargaSatu, `
+    select kirim_bukti($1, 'anak-siapkan-tas', 'cerita', $2, $3, null)
+  `, [rumahSatu, cerita, "f".repeat(64)]), /anak_wajib/);
+  await assert.rejects(as(anak, `
+    select kirim_bukti($1, 'anak-siapkan-tas', 'cerita', $2, $3, null)
+  `, [rumahSatu, cerita, "3".repeat(64)]), /anak_wajib/);
+  await as(anak, `
+    select kirim_bukti($1, $2, 'cerita', $3, $4, null, 'keluarga', $5)
+  `, [rumahSatu, tugasAnak, cerita, "1".repeat(64), anak]);
+  const tantanganUsiaLain = (await db.query(`
+    select slug from tantangan
+    where peran_target = 'anak' and segmen = 'beraksi'
+    limit 1
+  `)).rows[0].slug;
+  await assert.rejects(as(anak, `
+    select kirim_bukti($1, $2, 'cerita', $3, $4, null, 'keluarga', $5)
+  `, [rumahSatu, tantanganUsiaLain, cerita, "2".repeat(64), anak]), /segmen_tidak_sesuai/);
+});
 
 test("sasaran keluarga membatasi daftar dan pengiriman bukti", async () => {
   await simpanTantangan("khusus-satu", "Tantangan rumah satu", [rumahSatu], true, "2999-01-02");
@@ -198,6 +264,64 @@ test("lencana punya rentang poin dan masa berlaku, serta tetap dimiliki setelah 
     select count(*)::int as jumlah from lencana_poin_keluarga
     where keluarga_id=$1 and lencana_id=$2
   `, [rumahPoin, lencanaKedaluwarsa])).rows[0].jumlah, 0);
+});
+
+test("admin mengubah syarat lencana keluarga tanpa mengubah jenisnya", async () => {
+  const keluargaPoin = await user("lencana-bawaan@contoh.test", "Rumah Lencana");
+  const rumahPoin = (await as(keluargaPoin, `select buat_keluarga('Rumah Lencana', 'ayah') as id`)).rows[0].id;
+
+  await as(admin, `
+    select admin_simpan_lencana_bawaan(
+      'seminggu', 'Tiga hari bersama', 'keluarga', 3, null, null, null, true
+    )
+  `);
+  const aturanSeminggu = (await as(keluargaPoin, `
+    select syarat, terbuka from daftar_lencana_keluarga_bawaan($1) where slug='seminggu'
+  `, [rumahPoin])).rows[0];
+  assert.equal(aturanSeminggu.syarat, "3 hari berturut-turut ada tantangan disetujui");
+  assert.equal(aturanSeminggu.terbuka, false);
+
+  await assert.rejects(as(admin, `
+    select admin_simpan_lencana_bawaan(
+      'seminggu', 'Syarat tidak cocok', 'keluarga', null, 1, 10, null, true
+    )
+  `), /syarat_lencana_tidak_valid/);
+  await assert.rejects(as(keluargaPoin, `
+    select admin_simpan_lencana_bawaan(
+      'seminggu', 'Bukan admin', 'keluarga', 3, null, null, null, true
+    )
+  `), /bukan_admin/);
+  await assert.rejects(as(keluargaPoin, `
+    select * from daftar_lencana_keluarga_bawaan($1)
+  `, [rumahSatu]), /bukan_anggota/);
+  await assert.rejects(as(admin, `
+    insert into lencana_keluarga_perolehan (keluarga_id, lencana_slug, poin_dicapai)
+    values ($1, 'atap', 10)
+  `, [rumahPoin]), /permission denied/);
+
+  await as(admin, `
+    select admin_simpan_lencana_bawaan(
+      'atap', 'Atap keluarga', 'keluarga', null, 10, 20, null, true
+    )
+  `);
+  await simpanTantangan("lencana-bawaan-poin", "Tantangan lencana bawaan", [rumahPoin]);
+  const bukti = (await as(keluargaPoin, `
+    select kirim_bukti($1, 'lencana-bawaan-poin', 'cerita', $2, $3, null) as id
+  `, [rumahPoin, cerita, "f".repeat(64)])).rows[0].id;
+  await as(admin, `select admin_tinjau_bukti($1, 'disetujui', null)`, [bukti]);
+  assert.equal((await as(keluargaPoin, `
+    select terbuka from daftar_lencana_keluarga_bawaan($1) where slug='atap'
+  `, [rumahPoin])).rows[0].terbuka, true);
+
+  await as(admin, `
+    select admin_simpan_lencana_bawaan(
+      'atap', 'Atap keluarga', 'keluarga', null, 10, 20,
+      now() - interval '1 minute', false
+    )
+  `);
+  assert.equal((await as(keluargaPoin, `
+    select terbuka from daftar_lencana_keluarga_bawaan($1) where slug='atap'
+  `, [rumahPoin])).rows[0].terbuka, true);
 });
 
 test("layanan kesehatan mental hanya terbaca pengirim dan psikolog yang ditunjuk", async () => {

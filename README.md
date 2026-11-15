@@ -15,10 +15,10 @@ npm run test:rls             # uji migrasi dan RLS di Postgres lokal (pglite), t
 
 ## Menyiapkan Supabase
 
-1. Jalankan berurutan di SQL Editor (salin **seluruh isi** tiap file, bukan namanya): `supabase/migrations/0001_akun_keluarga.sql`, `0002_tantangan_bukti.sql`, `0003_isi_tantangan.sql`, `0004_admin.sql`, `0005_perasaan_catatan_masa_depan.sql`, `0006_pwa_pengingat.sql`, `0007_konten_admin.sql`, `0008_drive_admin_pusat.sql`, `0009_tantangan_segmen_anak.sql`, `0010_fitur_tantangan_layanan.sql`, `0011_admin_fitur_pengguna.sql`, `0012_lencana_rentang_masa.sql`.
+1. Jalankan berurutan di SQL Editor (salin **seluruh isi** tiap file, bukan namanya): `supabase/migrations/0001_akun_keluarga.sql`, `0002_tantangan_bukti.sql`, `0003_isi_tantangan.sql`, `0004_admin.sql`, `0005_perasaan_catatan_masa_depan.sql`, `0006_pwa_pengingat.sql`, `0007_konten_admin.sql`, `0008_drive_admin_pusat.sql`, `0009_tantangan_segmen_anak.sql`, `0010_fitur_tantangan_layanan.sql`, `0011_admin_fitur_pengguna.sql`, `0012_lencana_rentang_masa.sql`, `0013_lencana_keluarga_admin.sql`, `0014_tantangan_sesuai_peran.sql`.
 2. Admin platform yang menjadi anggota rumah dapat memakai fitur anggota sesuai peran dan hak yang sama. Akses catatan, check-in, dan data keluarga tetap dibatasi ke rumah tersebut; catatan pribadi anak tidak dibagikan.
 3. Migrasi `0007_konten_admin.sql` menambahkan pengelolaan tantangan, kartu obrolan, dan pertanyaan diskusi Materi GenRe. Tombol hapus mengarsipkan konten agar progres lama tetap ada. Kategori dan poin tantangan terkunci setelah bukti tercatat.
-4. Menu **Lencana** mengatur rentang poin dan waktu akhir dalam WIB. Lencana diberikan saat poin keluarga mencapai rentang tersebut dan tetap dimiliki setelah masa berlaku berakhir.
+4. Menu **Lencana** mengatur lencana poin tambahan dan lencana keluarga bawaan. Nama dan ikon lencana bawaan dapat diubah; jenis syarat lama tetap, termasuk jumlah tantangan, hari beruntun, dan tantangan komunikasi. Lencana **Atap terpasang** memakai rentang poin minimum/maksimum dan waktu akhir WIB. Lencana yang sudah didapat tetap dimiliki setelah batas waktu atau status aktif berubah.
 5. Authentication > Providers > Email: aktifkan **Confirm email** dan set panjang kata sandi minimal 8.
 6. Authentication > Providers > Google: isi Client ID dan Secret dari Google Cloud.
 7. Authentication > URL Configuration: Site URL = alamat situs, Redirect URLs = `<alamat situs>/auth/callback`.

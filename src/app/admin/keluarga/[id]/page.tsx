@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { IkonFitur } from "@/components/IkonFitur";
 import { formatWaktu, perluAdmin } from "@/lib/admin";
 import { formatTanggal } from "@/lib/data";
-import { daftarLencana, labelKategori, RINGKASAN_KOSONG, STATUS_BUKTI } from "@/lib/tantangan";
+import { labelKategori, RINGKASAN_KOSONG, STATUS_BUKTI } from "@/lib/tantangan";
 import { labelPeran } from "@/lib/umum";
 
 export const metadata: Metadata = { title: "Detail keluarga | Admin" };
@@ -16,6 +17,13 @@ type Detail = {
 };
 type Tren = { tanggal: string; senang: number; tenang: number; biasa: number; sedih: number; cemas: number };
 type RingkasanCatatan = { tanggal: string; jumlah: number };
+type LencanaKeluarga = {
+  slug: string;
+  nama: string;
+  ikon: "keluarga" | "tantangan" | "perasaan" | "syukur" | "materi";
+  syarat: string;
+  terbuka: boolean;
+};
 
 export default async function Halaman({ params }: PageProps<"/admin/keluarga/[id]">) {
   const { id } = await params;
@@ -26,11 +34,13 @@ export default async function Halaman({ params }: PageProps<"/admin/keluarga/[id
     { data: tren7, error: errorTren7 },
     { data: tren30, error: errorTren30 },
     { data: catatan, error: errorCatatan },
+    { data: lencanaData, error: errorLencana },
   ] = await Promise.all([
     supabase.rpc("admin_detail_keluarga", { p_keluarga: id }),
     supabase.rpc("admin_tren_perasaan", { p_keluarga: id, p_hari: 7 }),
     supabase.rpc("admin_tren_perasaan", { p_keluarga: id, p_hari: 30 }),
     supabase.rpc("admin_ringkasan_catatan", { p_keluarga: id }),
+    supabase.rpc("admin_lencana_keluarga", { p_keluarga: id }),
   ]);
   if (error?.message.includes("keluarga_tidak_ada")) notFound();
   if (error || !data) {
@@ -42,7 +52,7 @@ export default async function Halaman({ params }: PageProps<"/admin/keluarga/[id
   }
   const d = data as Detail;
   const r = { ...RINGKASAN_KOSONG, ...(d.ringkasan ?? {}) };
-  const lencana = daftarLencana(r);
+  const lencana = (lencanaData ?? []) as LencanaKeluarga[];
   const tujuhHari = (tren7 ?? []) as Tren[];
   const tigaPuluhHari = (tren30 ?? []) as Tren[];
   const jumlahCatatan = (catatan ?? []) as RingkasanCatatan[];
@@ -129,13 +139,20 @@ export default async function Halaman({ params }: PageProps<"/admin/keluarga/[id
 
       <section aria-labelledby="lencana" className="flex flex-col gap-2">
         <h2 id="lencana" className="text-lg font-semibold">Lencana</h2>
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {lencana.map((l) => (
-            <li key={l.id} className={`rounded-lg p-2 text-sm ${l.terbuka ? "border border-primary" : "border border-dashed border-field text-muted"}`}>
-              <strong>{l.nama}</strong>, {l.terbuka ? "terbuka" : "terkunci"}. {l.syarat}.
-            </li>
-          ))}
-        </ul>
+        {errorLencana ? (
+          <p role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
+            Lencana keluarga belum bisa dimuat. Muat ulang halaman.
+          </p>
+        ) : (
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {lencana.map((l) => (
+              <li key={l.slug} className={`flex items-center gap-2 rounded-lg p-2 text-sm ${l.terbuka ? "border border-primary" : "border border-dashed border-field text-muted"}`}>
+                <IkonFitur nama={l.ikon} className="size-5 shrink-0" />
+                <span><strong>{l.nama}</strong>, {l.terbuka ? "terbuka" : "terkunci"}. {l.syarat}.</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section aria-labelledby="riwayat" className="flex flex-col gap-2">

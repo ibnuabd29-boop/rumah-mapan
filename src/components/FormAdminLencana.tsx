@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { simpanLencanaAdmin, type HasilA } from "@/app/actions-admin";
 import { Medan, Pesan, Pilihan, Tombol } from "@/components/ui";
+import { waktuWibKeInput } from "@/lib/waktu-wib";
 
 type IkonLencana = "keluarga" | "tantangan" | "perasaan" | "syukur" | "materi";
 type Lencana = {
@@ -24,24 +25,6 @@ const IKON: { nilai: IkonLencana; label: string }[] = [
 ];
 
 const awal: HasilA = {};
-
-function waktuWibUntukInput(value?: string | null) {
-  if (!value) return undefined;
-  const bagian = new Map(
-    new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "Asia/Jakarta",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(new Date(value))
-      .map((item) => [item.type, item.value]),
-  );
-  return `${bagian.get("year")}-${bagian.get("month")}-${bagian.get("day")}T${bagian.get("hour")}:${bagian.get("minute")}`;
-}
 
 export function FormAdminLencana({ lencana }: { lencana?: Lencana }) {
   const [hasil, aksi] = useActionState(simpanLencanaAdmin, awal);
@@ -100,7 +83,7 @@ export function FormAdminLencana({ lencana }: { lencana?: Lencana }) {
         name="berlaku_sampai"
         label="Bisa didapat sampai"
         type="datetime-local"
-        defaultValue={waktuWibUntukInput(lencana?.berlaku_sampai)}
+        defaultValue={waktuWibKeInput(lencana?.berlaku_sampai)}
         petunjuk="Gunakan waktu WIB. Kosongkan jika tidak ada batas waktu."
       />
       {lencana ? (

@@ -26,23 +26,32 @@ export default async function Halaman({ searchParams }: PageProps<"/tantangan">)
     ? { id: user.id, tglLahir: profil.tgl_lahir }
     : daftarAnak.find((a) => a.id === anakId);
   const segmen = anakDipilih ? segmenUsiaAnak(anakDipilih.tglLahir) : null;
+  const peranTarget = anakDipilih
+    ? "anak"
+    : rumah && ["ayah", "ibu", "anak"].includes(rumah.peran)
+      ? rumah.peran
+      : null;
 
-  let q = supabase.from("tantangan").select("slug, kategori, segmen, judul, isi, menit, poin, dipin, tenggat")
+  let q = supabase.from("tantangan").select("slug, kategori, segmen, judul, isi, menit, poin, dipin, tenggat, peran_target")
     .eq("aktif", true).order("dipin", { ascending: false }).order("kategori").order("judul");
   if (kategori) q = q.eq("kategori", kategori);
-  q = segmen
-    ? q.or(`segmen.is.null,segmen.eq.${segmen}`)
-    : q.is("segmen", null);
+  const peranTerms = peranTarget
+    ? [`peran_target.is.null`, `peran_target.eq.${peranTarget}`]
+    : ["peran_target.is.null"];
+  const segmenTerms = segmen ? ["segmen.is.null", `segmen.eq.${segmen}`] : ["segmen.is.null"];
+  q = q.or(peranTerms.flatMap((peran) => segmenTerms.map((usia) => `and(${peran},${usia})`)).join(","));
+  const queryBuktiHariIni = supabase.from("bukti")
+    .select("tantangan_slug, status")
+    .eq("keluarga_id", rumah?.id ?? "")
+    .eq("tanggal", hariIniWib())
+    .in("status", ["menunggu", "disetujui", "ditandai"]);
+  const buktiHariIniQuery = anakDipilih
+    ? queryBuktiHariIni.eq("anak_id", anakDipilih.id)
+    : queryBuktiHariIni.is("anak_id", null);
   const [{ data: daftar, error }, { data: hariIni }] = await Promise.all([
     q,
     rumah
-      ? supabase
-          .from("bukti")
-          .select("tantangan_slug, status")
-          .eq("keluarga_id", rumah.id)
-          .eq("tanggal", hariIniWib())
-          .or(anakDipilih ? `anak_id.is.null,anak_id.eq.${anakDipilih.id}` : "anak_id.is.null")
-          .in("status", ["menunggu", "disetujui", "ditandai"])
+      ? buktiHariIniQuery
       : Promise.resolve({ data: [] }),
   ]);
   const status = new Map((hariIni ?? []).map((b) => [b.tantangan_slug, b.status]));
@@ -84,13 +93,15 @@ export default async function Halaman({ searchParams }: PageProps<"/tantangan">)
                   !anakDipilih ? "border-primary bg-primary text-on-primary" : "border-field hover:bg-line/50"
                 }`}
               >
-                Tantangan umum
+                Untuk saya
               </Link>
             </li>
           </ul>
           {anakDipilih ? (
             <p className="text-sm text-muted">
-              {segmen ? `Menampilkan ${labelSegmen(segmen)} dan tantangan umum.` : "Belum masuk rentang segmen umur, jadi hanya tantangan umum yang ditampilkan."}
+              {segmen
+                ? `Menampilkan tantangan untuk anak ini, termasuk yang sesuai ${labelSegmen(segmen)}.`
+                : "Kelompok usia belum dapat ditentukan. Tantangan yang dibatasi usia tidak ditampilkan."}
             </p>
           ) : (
             <p className="text-sm text-muted">Pilih anak untuk melihat tantangan sesuai kelompok umurnya.</p>
@@ -98,7 +109,9 @@ export default async function Halaman({ searchParams }: PageProps<"/tantangan">)
         </nav>
       ) : rumah?.peran === "anak" ? (
         <p className="text-sm text-muted">
-          {segmen ? `Menampilkan ${labelSegmen(segmen)} dan tantangan umum.` : "Belum masuk rentang segmen umur, jadi hanya tantangan umum yang ditampilkan."}
+          {segmen
+            ? `Menampilkan tantangan untuk anak ini, termasuk yang sesuai ${labelSegmen(segmen)}.`
+            : "Kelompok usia belum dapat ditentukan. Tantangan yang dibatasi usia tidak ditampilkan."}
         </p>
       ) : null}
 

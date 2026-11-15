@@ -40,9 +40,9 @@ export function segmenUsiaAnak(tglLahir: string | null) {
 }
 
 export const MODE = [
-  { nilai: "biasa", label: "Hari biasa", bantu: "Tantangan umum untuk seluruh keluarga." },
-  { nilai: "pulang_kerja", label: "Ayah pulang kerja", bantu: "Singkat, 3 sampai 25 menit, ayah boleh tetap santai." },
-  { nilai: "hari_kunjungan", label: "Anak ke tempat kerja", bantu: "Untuk hari anak ikut ayah bekerja." },
+  { nilai: "biasa", label: "Hari biasa", bantu: "Tantangan rutin sesuai peran dan kelompok usia." },
+  { nilai: "pulang_kerja", label: "Orang tua pulang kerja", bantu: "Singkat setelah orang tua tiba di rumah." },
+  { nilai: "hari_kunjungan", label: "Anak ikut ke tempat kerja", bantu: "Untuk hari anak ikut orang tua bekerja." },
 ] as const;
 
 export type Ringkasan = {
@@ -83,19 +83,6 @@ export function tahapRumah(poin: number) {
   const aktif = [...TAHAP].reverse().find((t) => poin >= t.dari) ?? TAHAP[0];
   const berikut = TAHAP.find((t) => t.dari > poin) ?? null;
   return { aktif, berikut };
-}
-
-export type Lencana = { id: string; nama: string; syarat: string; terbuka: boolean };
-
-// Lencana dihitung dari data nyata. Yang terkunci tampil terkunci dengan syaratnya.
-export function daftarLencana(r: Ringkasan): Lencana[] {
-  return [
-    { id: "langkah-pertama", nama: "Langkah pertama", syarat: "Satu tantangan disetujui", terbuka: r.selesai >= 1 },
-    { id: "seminggu", nama: "Seminggu beruntun", syarat: "Tujuh hari berturut-turut ada tantangan disetujui", terbuka: r.beruntun_terbaik >= 7 },
-    { id: "tim-solid", nama: "Tim solid", syarat: "Sepuluh tantangan disetujui", terbuka: r.selesai >= 10 },
-    { id: "pendengar", nama: "Pendengar hebat", syarat: "Lima tantangan komunikasi disetujui", terbuka: r.komunikasi >= 5 },
-    { id: "atap", nama: "Atap terpasang", syarat: "300 poin keluarga", terbuka: r.poin >= 300 },
-  ];
 }
 
 export const STATUS_BUKTI: Record<string, string> = {
