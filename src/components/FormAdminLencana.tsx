@@ -5,7 +5,15 @@ import { simpanLencanaAdmin, type HasilA } from "@/app/actions-admin";
 import { Medan, Pesan, Pilihan, Tombol } from "@/components/ui";
 
 type IkonLencana = "keluarga" | "tantangan" | "perasaan" | "syukur" | "materi";
-type Lencana = { id: string; nama: string; ikon: IkonLencana; target_poin: number; aktif: boolean };
+type Lencana = {
+  id: string;
+  nama: string;
+  ikon: IkonLencana;
+  poin_minimum: number;
+  poin_maksimum: number;
+  berlaku_sampai: string | null;
+  aktif: boolean;
+};
 
 const IKON: { nilai: IkonLencana; label: string }[] = [
   { nilai: "keluarga", label: "Keluarga" },
@@ -16,6 +24,24 @@ const IKON: { nilai: IkonLencana; label: string }[] = [
 ];
 
 const awal: HasilA = {};
+
+function waktuWibUntukInput(value?: string | null) {
+  if (!value) return undefined;
+  const bagian = new Map(
+    new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date(value))
+      .map((item) => [item.type, item.value]),
+  );
+  return `${bagian.get("year")}-${bagian.get("month")}-${bagian.get("day")}T${bagian.get("hour")}:${bagian.get("minute")}`;
+}
 
 export function FormAdminLencana({ lencana }: { lencana?: Lencana }) {
   const [hasil, aksi] = useActionState(simpanLencanaAdmin, awal);
@@ -49,21 +75,39 @@ export function FormAdminLencana({ lencana }: { lencana?: Lencana }) {
           ))}
         </Pilihan>
         <Medan
-          id={`target-lencana-${lencana?.id ?? "baru"}`}
-          name="target_poin"
-          label="Target poin"
+          id={`poin-minimum-lencana-${lencana?.id ?? "baru"}`}
+          name="poin_minimum"
+          label="Poin minimum"
           type="number"
           min={1}
           max={1_000_000}
-          defaultValue={lencana?.target_poin ?? 50}
+          defaultValue={lencana?.poin_minimum ?? 50}
+          required
+        />
+        <Medan
+          id={`poin-maksimum-lencana-${lencana?.id ?? "baru"}`}
+          name="poin_maksimum"
+          label="Poin maksimum"
+          type="number"
+          min={1}
+          max={1_000_000}
+          defaultValue={lencana?.poin_maksimum ?? 100}
           required
         />
       </div>
+      <Medan
+        id={`berlaku-sampai-lencana-${lencana?.id ?? "baru"}`}
+        name="berlaku_sampai"
+        label="Bisa didapat sampai"
+        type="datetime-local"
+        defaultValue={waktuWibUntukInput(lencana?.berlaku_sampai)}
+        petunjuk="Gunakan waktu WIB. Kosongkan jika tidak ada batas waktu."
+      />
       {lencana ? (
         <Pilihan
           id={`status-lencana-${lencana.id}`}
           name="aktif"
-          label="Tampilan"
+          label="Status lencana"
           defaultValue={String(lencana.aktif)}
         >
           <option value="true">Aktif</option>
@@ -72,7 +116,9 @@ export function FormAdminLencana({ lencana }: { lencana?: Lencana }) {
       ) : (
         <input type="hidden" name="aktif" value="true" />
       )}
-      <p className="text-sm text-muted">Ikon dipilih dari simbol fitur Rumah Mapan.</p>
+      <p className="text-sm text-muted">
+        Lencana didapat saat total poin masuk rentang ini. Lencana yang sudah didapat tetap tersimpan.
+      </p>
       <Pesan galat={hasil.galat} ok={hasil.ok} />
       <div>
         <Tombol>{lencana ? "Simpan lencana" : "Tambah lencana poin"}</Tombol>

@@ -20,6 +20,21 @@ import { labelPeran } from "@/lib/umum";
 export const metadata: Metadata = { title: "Beranda" };
 
 const PERAN_ORTU = ["ayah", "ibu", "wali", "kakek_nenek", "ortu_tunggal"];
+const waktuLencana = new Intl.DateTimeFormat("id-ID", {
+  dateStyle: "long",
+  timeStyle: "short",
+  timeZone: "Asia/Jakarta",
+});
+
+type LencanaPoin = {
+  id: string;
+  nama: string;
+  ikon: "keluarga" | "tantangan" | "perasaan" | "syukur" | "materi";
+  poin_minimum: number;
+  poin_maksimum: number;
+  berlaku_sampai: string | null;
+  terbuka: boolean;
+};
 
 function mundurHari(tanggal: string, jumlah: number) {
   const d = new Date(`${tanggal}T00:00:00Z`);
@@ -78,9 +93,7 @@ export default async function Halaman() {
     supabase.from("tantangan")
       .select("slug, judul, isi, tenggat")
       .eq("dipin", true).eq("aktif", true).order("judul"),
-    supabase.from("lencana_poin")
-      .select("id, nama, ikon, target_poin")
-      .eq("aktif", true).order("target_poin").order("nama"),
+    supabase.rpc("daftar_lencana_keluarga", { p_keluarga: rumah.id }),
   ]);
 
   const semuaAnak = (daftarAnggota.data ?? [])
@@ -452,22 +465,28 @@ export default async function Halaman() {
             <li role="alert" className="rounded-lg border border-bahaya px-3 py-2 text-bahaya">
               Lencana poin tambahan belum bisa dimuat. Muat ulang halaman.
             </li>
-          ) : lencanaPoin.data?.map((item) => {
-            const terbuka = ringkasan.poin >= item.target_poin;
+          ) : ((lencanaPoin.data ?? []) as LencanaPoin[]).map((item) => {
             return (
               <li
                 key={item.id}
                 className={`flex items-center gap-3 rounded-lg p-3 ${
-                  terbuka ? "border border-primary bg-surface" : "border border-dashed border-field text-muted"
+                  item.terbuka ? "border border-primary bg-surface" : "border border-dashed border-field text-muted"
                 }`}
               >
                 <IkonFitur nama={item.ikon} className="size-6 shrink-0" />
                 <div>
                   <p className="font-semibold">
                     {item.nama}
-                    <span className="ml-2 text-sm font-normal">{terbuka ? "Terbuka" : "Terkunci"}</span>
+                    <span className="ml-2 text-sm font-normal">{item.terbuka ? "Terbuka" : "Terkunci"}</span>
                   </p>
-                  <p className="text-sm">{item.target_poin} poin keluarga</p>
+                  <p className="text-sm">
+                    {item.poin_minimum} hingga {item.poin_maksimum} poin keluarga
+                  </p>
+                  {item.berlaku_sampai ? (
+                    <p className="text-sm">
+                      Bisa didapat sampai {waktuLencana.format(new Date(item.berlaku_sampai))} WIB.
+                    </p>
+                  ) : null}
                 </div>
               </li>
             );

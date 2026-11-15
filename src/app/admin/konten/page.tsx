@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FormAdminPertanyaan } from "@/components/FormAdminPertanyaan";
-import { FormAdminLencana } from "@/components/FormAdminLencana";
 import { FormAdminStatusKonten } from "@/components/FormAdminStatusKonten";
 import { FormAdminTantangan } from "@/components/FormAdminTantangan";
 import { perluAdmin } from "@/lib/admin";
@@ -40,17 +39,9 @@ type SasaranTantangan = {
   untuk_semua: boolean;
   keluarga_ids: string[];
 };
-type LencanaPoin = {
-  id: string;
-  nama: string;
-  ikon: "keluarga" | "tantangan" | "perasaan" | "syukur" | "materi";
-  target_poin: number;
-  aktif: boolean;
-};
 type OpsiKonten = {
   keluarga: Keluarga[];
   tantangan: SasaranTantangan[];
-  lencana: LencanaPoin[];
 };
 
 function DaftarPertanyaan({
@@ -107,7 +98,6 @@ export default async function Halaman() {
     keluarga_ids: sasaran.get(item.slug)?.keluarga_ids ?? [],
   }));
   const keluarga = opsi?.keluarga ?? [];
-  const lencana = opsi?.lencana ?? [];
   const kelompok = konten?.kelompok ?? [];
   const pertanyaan = konten?.pertanyaan ?? [];
   const kelompokObrolan = kelompok.filter((item) => item.jenis === "obrolan");
@@ -164,35 +154,6 @@ export default async function Halaman() {
                       </div>
                     </details>
                     <FormAdminStatusKonten jenis="tantangan" id={item.slug} aktif={item.aktif} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section aria-labelledby="lencana-poin" className="flex flex-col gap-3 border-t border-line pt-5">
-            <div>
-              <h2 id="lencana-poin" className="text-xl font-semibold">Lencana poin tambahan</h2>
-              <p className="text-sm text-muted">
-                Lencana ini terbuka berdasarkan total poin keluarga. Lencana yang sudah terbuka tidak menghentikan pengumpulan poin.
-              </p>
-            </div>
-            <details className="rounded-lg border border-line p-3">
-              <summary className="min-h-11 cursor-pointer py-2 font-semibold">Tambah lencana poin</summary>
-              <div className="pt-3"><FormAdminLencana /></div>
-            </details>
-            {lencana.length === 0 ? (
-              <p className="text-muted">Belum ada lencana poin tambahan.</p>
-            ) : (
-              <ul className="divide-y divide-line border-y border-line">
-                {lencana.map((item) => (
-                  <li key={item.id} className="py-3">
-                    <details>
-                      <summary className="min-h-11 cursor-pointer py-2 font-semibold">
-                        {item.nama}, {item.target_poin} poin, {item.aktif ? "aktif" : "nonaktif"}
-                      </summary>
-                      <div className="pt-2"><FormAdminLencana lencana={item} /></div>
-                    </details>
                   </li>
                 ))}
               </ul>

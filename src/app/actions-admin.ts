@@ -23,7 +23,9 @@ const GALAT: Record<string, string> = {
   tenggat_tidak_valid: "Tenggat tidak boleh berada di masa lalu.",
   nama_lencana_tidak_valid: "Nama lencana harus berisi 3 sampai 60 karakter.",
   ikon_lencana_tidak_valid: "Pilih ikon lencana yang tersedia.",
-  target_poin_tidak_valid: "Target poin harus antara 1 dan 1.000.000.",
+  target_poin_tidak_valid: "Poin minimum harus antara 1 dan 1.000.000.",
+  poin_minimum_tidak_valid: "Poin minimum harus antara 1 dan 1.000.000.",
+  poin_maksimum_tidak_valid: "Poin maksimum harus sama atau lebih besar dari minimum, hingga 1.000.000.",
   status_lencana_tidak_valid: "Status lencana tidak valid.",
   lencana_tidak_ada: "Lencana tidak ditemukan.",
   slug_sudah_dipakai: "ID tantangan sudah digunakan. Ubah judul lalu coba lagi.",
@@ -194,25 +196,65 @@ export async function simpanLencanaAdmin(_: HasilA, data: FormData): Promise<Has
     id: z.string().optional().transform((id) => id || null).pipe(z.string().uuid().nullable()),
     nama: z.string().trim().min(3).max(60),
     ikon: z.enum(["keluarga", "tantangan", "perasaan", "syukur", "materi"]),
-    target_poin: z.coerce.number().int().min(1).max(1_000_000),
+    poin_minimum: z.coerce.number().int().min(1).max(1_000_000),
+    poin_maksimum: z.coerce.number().int().min(1).max(1_000_000),
+    berlaku_sampai: z.string().optional().transform((value) => value?.trim() || null),
     aktif: z.enum(["true", "false"]).transform((aktif) => aktif === "true"),
   }).safeParse(Object.fromEntries(data));
   if (!v.success) return { galat: "Periksa kembali isian lencana." };
+  if (v.data.poin_maksimum < v.data.poin_minimum) {
+    return { galat: "Poin maksimum harus sama atau lebih besar dari minimum." };
+  }
+
+  const berlakuSampai = v.data.berlaku_sampai
+    ? waktuWibKeISO(v.data.berlaku_sampai)
+    : null;
+  if (v.data.berlaku_sampai && !berlakuSampai) {
+    return { galat: "Masukkan tanggal dan waktu akhir yang valid." };
+  }
 
   const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("admin_simpan_lencana", {
+  const { error } = await supabase.rpc("admin_simpan_lencana_rentang", {
     p_id: v.data.id,
     p_nama: v.data.nama,
     p_ikon: v.data.ikon,
-    p_target_poin: v.data.target_poin,
+    p_poin_minimum: v.data.poin_minimum,
+    p_poin_maksimum: v.data.poin_maksimum,
+    p_berlaku_sampai: berlakuSampai,
     p_aktif: v.data.aktif,
   });
   if (error) return { galat: pesanGalat(error) };
 
-  revalidatePath("/admin/konten");
+  revalidatePath("/admin/lencana");
   revalidatePath("/beranda");
   revalidatePath("/admin/keluarga");
   return { ok: "Lencana disimpan." };
+}
+
+function waktuWibKeISO(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const [, tahunTeks, bulanTeks, hariTeks, jamTeks, menitTeks] = match;
+  const tahun = Number(tahunTeks);
+  const bulan = Number(bulanTeks);
+  const hari = Number(hariTeks);
+  const jam = Number(jamTeks);
+  const menit = Number(menitTeks);
+  const waktuDinding = new Date(0);
+  waktuDinding.setUTCFullYear(tahun, bulan - 1, hari);
+  waktuDinding.setUTCHours(jam, menit, 0, 0);
+  if (
+    waktuDinding.getUTCFullYear() !== tahun
+    || waktuDinding.getUTCMonth() !== bulan - 1
+    || waktuDinding.getUTCDate() !== hari
+    || jam > 23
+    || menit > 59
+  ) {
+    return null;
+  }
+
+  return new Date(waktuDinding.getTime() - 7 * 60 * 60 * 1000).toISOString();
 }
 
 export async function statusPertanyaanAdmin(_: HasilA, data: FormData): Promise<HasilA> {

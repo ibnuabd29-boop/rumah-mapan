@@ -34,6 +34,7 @@ for (const migrasi of [
   "0009_tantangan_segmen_anak",
   "0010_fitur_tantangan_layanan",
   "0011_admin_fitur_pengguna",
+  "0012_lencana_rentang_masa",
 ]) {
   await db.exec(readFileSync(`supabase/migrations/${migrasi}.sql`, "utf8"));
 }
@@ -116,6 +117,87 @@ test("lencana poin dapat dikonfigurasi admin dan poin terus terakumulasi", async
   const ringkasan = (await as(keluargaSatu, `select ringkasan_keluarga($1) as data`, [rumahSatu])).rows[0].data;
   assert.equal(ringkasan.poin, 20);
   assert.ok(ringkasan.poin > 5);
+});
+
+test("lencana punya rentang poin dan masa berlaku, serta tetap dimiliki setelah didapat", async () => {
+  const keluargaPoin = await user("rentang-lencana@contoh.test", "Rumah Rentang");
+  const rumahPoin = (await as(keluargaPoin, `select buat_keluarga('Rumah Rentang', 'ayah') as id`)).rows[0].id;
+  const berakhir = "2999-12-31T23:59:00+07:00";
+
+  const lencanaRentang = (await as(admin, `
+    select admin_simpan_lencana_rentang(
+      null, 'Lencana rentang', 'keluarga', 10, 20, $1::timestamptz, true
+    ) as id
+  `, [berakhir])).rows[0].id;
+  const lencanaKedua = (await as(admin, `
+    select admin_simpan_lencana_rentang(
+      null, 'Lencana kedua', 'tantangan', 20, 30, $1::timestamptz, true
+    ) as id
+  `, [berakhir])).rows[0].id;
+  const lencanaKedaluwarsa = (await as(admin, `
+    select admin_simpan_lencana_rentang(
+      null, 'Lencana kedaluwarsa', 'syukur', 1, 100, now() - interval '1 minute', true
+    ) as id
+  `)).rows[0].id;
+
+  await assert.rejects(as(keluargaPoin, `
+    select * from daftar_lencana_keluarga($1)
+  `, [rumahSatu]), /bukan_anggota/);
+  await assert.rejects(as(keluargaPoin, `
+    insert into lencana_poin_keluarga (keluarga_id, lencana_id, poin_dicapai)
+    values ($1, $2, 10)
+  `, [rumahPoin, lencanaRentang]), /permission denied/);
+  await assert.rejects(as(admin, `
+    select admin_simpan_lencana_rentang(null, 'Rentang salah', 'keluarga', 20, 10, null, true)
+  `), /poin_maksimum_tidak_valid/);
+
+  const daftarAwal = await as(keluargaPoin, `
+    select id from daftar_lencana_keluarga($1)
+  `, [rumahPoin]);
+  assert.equal(daftarAwal.rows.some((row) => row.id === lencanaKedaluwarsa), false);
+
+  for (let nomor = 1; nomor <= 4; nomor += 1) {
+    const slug = `badge-rentang-${nomor}`;
+    await simpanTantangan(slug, `Tantangan rentang ${nomor}`, [rumahPoin]);
+    const bukti = (await as(keluargaPoin, `
+      select kirim_bukti($1, $2, 'cerita', $3, $4, null) as id
+    `, [rumahPoin, slug, cerita + ` ${nomor}`, String(nomor).padStart(64, "e")])).rows[0].id;
+    await as(admin, `select admin_tinjau_bukti($1, 'disetujui', null)`, [bukti]);
+
+    if (nomor === 1) {
+      assert.equal((await as(keluargaPoin, `
+        select terbuka from daftar_lencana_keluarga($1) where id=$2
+      `, [rumahPoin, lencanaRentang])).rows[0].terbuka, true);
+      await db.query(`
+        update lencana_poin set berlaku_sampai = now() - interval '1 second' where id=$1
+      `, [lencanaRentang]);
+    }
+    if (nomor === 2) {
+      assert.equal((await as(keluargaPoin, `
+        select terbuka from daftar_lencana_keluarga($1) where id=$2
+      `, [rumahPoin, lencanaKedua])).rows[0].terbuka, true);
+    }
+  }
+
+  const milik = await as(keluargaPoin, `
+    select lencana_id, poin_dicapai from lencana_poin_keluarga
+    where keluarga_id=$1 and lencana_id in ($2, $3, $4) order by lencana_id
+  `, [rumahPoin, lencanaRentang, lencanaKedua, lencanaKedaluwarsa]);
+  assert.deepEqual(
+    milik.rows.map((row) => row.lencana_id).sort(),
+    [lencanaRentang, lencanaKedua].sort(),
+  );
+  assert.equal(
+    milik.rows.find((row) => row.lencana_id === lencanaRentang).poin_dicapai,
+    10,
+  );
+  assert.equal((await as(keluargaPoin, `
+    select terbuka from daftar_lencana_keluarga($1) where id=$2
+  `, [rumahPoin, lencanaRentang])).rows[0].terbuka, true);
+  assert.equal((await as(keluargaPoin, `
+    select count(*)::int as jumlah from lencana_poin_keluarga
+    where keluarga_id=$1 and lencana_id=$2
+  `, [rumahPoin, lencanaKedaluwarsa])).rows[0].jumlah, 0);
 });
 
 test("layanan kesehatan mental hanya terbaca pengirim dan psikolog yang ditunjuk", async () => {
