@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const MENU = [
   { href: "/admin", label: "Ringkasan", tepat: true },
   { href: "/admin/progres", label: "Progres" },
+  { href: "/admin/tantangan", label: "Tantangan" },
   { href: "/admin/konten", label: "Konten" },
   { href: "/admin/lencana", label: "Lencana" },
   { href: "/admin/drive", label: "Google Drive" },

@@ -44,6 +44,7 @@ const GALAT: Record<string, string> = {
   kelompok_tidak_valid: "Pilih kelompok pertanyaan yang tersedia.",
   pertanyaan_tidak_valid: "Pertanyaan harus berisi 5 sampai 500 karakter.",
   pertanyaan_tidak_ada: "Pertanyaan tidak ditemukan.",
+  keluarga_tidak_ada: "Keluarga tidak ditemukan.",
 };
 
 export async function tinjauAdmin(_: HasilA, data: FormData): Promise<HasilA> {
@@ -140,6 +141,7 @@ export async function simpanTantanganAdmin(_: HasilA, data: FormData): Promise<H
   if (error) return { galat: pesanGalat(error) };
 
   revalidatePath("/admin/konten");
+  revalidatePath("/admin/tantangan");
   revalidatePath("/tantangan");
   revalidatePath("/beranda");
   return { ok: "Tantangan disimpan." };
@@ -189,6 +191,7 @@ export async function statusTantanganAdmin(_: HasilA, data: FormData): Promise<H
   if (error) return { galat: pesanGalat(error) };
 
   revalidatePath("/admin/konten");
+  revalidatePath("/admin/tantangan");
   revalidatePath("/tantangan");
   revalidatePath("/beranda");
   return { ok: v.data.aktif ? "Tantangan diaktifkan." : "Tantangan diarsipkan." };
@@ -317,4 +320,41 @@ export async function statusPertanyaanAdmin(_: HasilA, data: FormData): Promise<
   revalidatePath("/materi");
   revalidatePath("/offline-content");
   return { ok: v.data.aktif ? "Pertanyaan diaktifkan." : "Pertanyaan diarsipkan." };
+}
+
+export async function hapusKeluargaAdmin(_: HasilA, data: FormData): Promise<HasilA> {
+  const v = z.object({
+    id: z.string().uuid(),
+  }).safeParse(Object.fromEntries(data));
+  if (!v.success) return { galat: "ID keluarga tidak valid." };
+
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("admin_hapus_keluarga", {
+    p_keluarga: v.data.id,
+  });
+  if (error) return { galat: pesanGalat(error) };
+
+  revalidatePath("/admin", "layout");
+  revalidatePath("/admin/keluarga");
+  revalidatePath("/beranda");
+  return { ok: "Keluarga berhasil dihapus secara permanen." };
+}
+
+export async function hapusDataKeluargaAdmin(_: HasilA, data: FormData): Promise<HasilA> {
+  const v = z.object({
+    id: z.string().uuid(),
+  }).safeParse(Object.fromEntries(data));
+  if (!v.success) return { galat: "ID keluarga tidak valid." };
+
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("admin_hapus_data_keluarga", {
+    p_keluarga: v.data.id,
+  });
+  if (error) return { galat: pesanGalat(error) };
+
+  revalidatePath("/admin", "layout");
+  revalidatePath(`/admin/keluarga/${v.data.id}`);
+  revalidatePath("/admin/keluarga");
+  revalidatePath("/beranda");
+  return { ok: "Semua data progres dan riwayat aktivitas keluarga berhasil dibersihkan." };
 }

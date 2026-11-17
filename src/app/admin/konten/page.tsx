@@ -122,11 +122,19 @@ export default async function Halaman() {
       ) : (
         <>
           <section aria-labelledby="tantangan" className="flex flex-col gap-3">
-            <div>
-              <h2 id="tantangan" className="text-xl font-semibold">Tantangan</h2>
-              <p className="text-sm text-muted">
-                Isi tantangan menjadi instruksi atau pertanyaan yang dibaca keluarga. Kategori, segmen umur, dan poin terkunci setelah bukti tercatat.
-              </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 id="tantangan" className="text-xl font-semibold">Tantangan</h2>
+                <p className="text-sm text-muted">
+                  Isi tantangan menjadi instruksi atau pertanyaan yang dibaca keluarga. Kategori, segmen umur, dan poin terkunci setelah bukti tercatat.
+                </p>
+              </div>
+              <Link
+                href="/admin/tantangan"
+                className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10"
+              >
+                Buka filter tantangan lengkap
+              </Link>
             </div>
             <details className="rounded-lg border border-line p-3">
               <summary className="min-h-11 cursor-pointer py-2 font-semibold">Tambah tantangan</summary>

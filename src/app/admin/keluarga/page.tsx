@@ -51,6 +51,7 @@ export default async function Halaman({ searchParams }: PageProps<"/admin/keluar
               <th scope="col" className="hidden py-2 pr-2 text-right sm:table-cell">Selesai</th>
               <th scope="col" className="py-2 pr-2 text-right">Menunggu</th>
               <th scope="col" className="hidden py-2 md:table-cell">Terakhir aktif</th>
+              <th scope="col" className="py-2 pl-2 text-right">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -68,6 +69,14 @@ export default async function Halaman({ searchParams }: PageProps<"/admin/keluar
                 <td className="hidden py-2 pr-2 text-right sm:table-cell">{k.selesai}</td>
                 <td className="py-2 pr-2 text-right">{k.menunggu}</td>
                 <td className="hidden py-2 md:table-cell">{formatWaktu(k.aktif_terakhir)}</td>
+                <td className="py-2 pl-2 text-right">
+                  <Link
+                    href={`/admin/keluarga/${k.id}`}
+                    className="inline-flex min-h-11 items-center font-semibold text-primary underline"
+                  >
+                    Detail & Kelola
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

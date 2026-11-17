@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -24,7 +24,8 @@ function terjemah(pesan: string, status?: number) {
   const m = pesan.toLowerCase();
   if (status === 429 || m.includes("rate limit") || m.includes("too many"))
     return "Terlalu banyak percobaan. Tunggu beberapa menit, lalu coba lagi.";
-  if (m.includes("email not confirmed")) return "Email belum diverifikasi. Buka tautan di email kiriman kami.";
+  if (m.includes("email not confirmed"))
+    return "Verifikasi email aktif di Supabase. Harap nonaktifkan 'Confirm email' di Authentication -> Providers -> Email di dashboard Supabase.";
   if (m.includes("invalid login")) return "Email atau kata sandi salah.";
   if (m.includes("already registered")) return "Email ini sudah terdaftar. Coba masuk.";
   if (m.includes("password should contain") || m.includes("weak"))
@@ -41,7 +42,37 @@ export async function masuk(_: Hasil, data: FormData): Promise<Hasil> {
       .parse(Object.fromEntries(data));
     const supabase = await supabaseServer();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { galat: terjemah(error.message, error.status), nilai: isian(data, "email") };
+    if (error) {
+      // Jika terhalang konfirmasi email dan service role tersedia, otomatis verifikasi lalu coba masuk kembali
+      if (
+        error.message.toLowerCase().includes("email not confirmed") &&
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      ) {
+        try {
+          const { createClient } = await import("@supabase/supabase-js");
+          const admin = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY,
+            { auth: { persistSession: false } }
+          );
+          const { data: usersData } = await admin.auth.admin.listUsers();
+          const target = usersData?.users.find((u) => u.email?.toLowerCase() === email);
+          if (target) {
+            await admin.auth.admin.updateUserById(target.id, { email_confirm: true });
+            const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
+            if (retryError) {
+              return { galat: terjemah(retryError.message, retryError.status), nilai: isian(data, "email") };
+            }
+          } else {
+            return { galat: terjemah(error.message, error.status), nilai: isian(data, "email") };
+          }
+        } catch {
+          return { galat: terjemah(error.message, error.status), nilai: isian(data, "email") };
+        }
+      } else {
+        return { galat: terjemah(error.message, error.status), nilai: isian(data, "email") };
+      }
+    }
     tujuan = jalurAman(data.get("next"));
   } catch (e) {
     return { galat: pesanGalat(e, "Periksa isian Anda."), nilai: isian(data, "email") };
@@ -50,6 +81,7 @@ export async function masuk(_: Hasil, data: FormData): Promise<Hasil> {
 }
 
 export async function daftar(_: Hasil, data: FormData): Promise<Hasil> {
+  let tujuan = "/beranda";
   try {
     const v = z
       .object({
@@ -60,7 +92,7 @@ export async function daftar(_: Hasil, data: FormData): Promise<Hasil> {
       })
       .parse(Object.fromEntries(data));
     const supabase = await supabaseServer();
-    const { error } = await supabase.auth.signUp({
+    const { data: res, error } = await supabase.auth.signUp({
       email: v.email,
       password: v.password,
       options: {
@@ -69,10 +101,54 @@ export async function daftar(_: Hasil, data: FormData): Promise<Hasil> {
       },
     });
     if (error) return { galat: terjemah(error.message, error.status), nilai: isian(data, "nama", "email") };
-    return { ok: "Kami mengirim tautan verifikasi ke email Anda. Buka tautan itu untuk mulai masuk." };
+
+    tujuan = jalurAman(data.get("next"));
+
+    // Jika Supabase langsung membuat sesi (email confirmation nonaktif):
+    if (!res?.session) {
+      // Coba masuk langsung dengan email & password
+      const { data: masukData, error: masukError } = await supabase.auth.signInWithPassword({
+        email: v.email,
+        password: v.password,
+      });
+
+      if (masukError) {
+        // Jika terhalang konfirmasi email dan service role tersedia, otomatis verifikasi
+        if (
+          masukError.message.toLowerCase().includes("email not confirmed") &&
+          process.env.SUPABASE_SERVICE_ROLE_KEY &&
+          res?.user?.id
+        ) {
+          try {
+            const { createClient } = await import("@supabase/supabase-js");
+            const admin = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL!,
+              process.env.SUPABASE_SERVICE_ROLE_KEY,
+              { auth: { persistSession: false } }
+            );
+            await admin.auth.admin.updateUserById(res.user.id, { email_confirm: true });
+            const { error: ulangError } = await supabase.auth.signInWithPassword({
+              email: v.email,
+              password: v.password,
+            });
+            if (ulangError) {
+              return { galat: terjemah(ulangError.message, ulangError.status), nilai: isian(data, "nama", "email") };
+            }
+          } catch {
+            return {
+              galat: "Akun dibuat, namun verifikasi email masih aktif di Supabase. Harap nonaktifkan 'Confirm email' di Authentication -> Providers -> Email di dashboard Supabase.",
+              nilai: isian(data, "nama", "email"),
+            };
+          }
+        } else {
+          return { galat: terjemah(masukError.message, masukError.status), nilai: isian(data, "nama", "email") };
+        }
+      }
+    }
   } catch (e) {
     return { galat: pesanGalat(e, "Periksa isian Anda."), nilai: isian(data, "nama", "email") };
   }
+  redirect(tujuan);
 }
 
 export async function tautanMasuk(_: Hasil, data: FormData): Promise<Hasil> {

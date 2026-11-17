@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FormAdminHapusDataKeluarga, FormAdminHapusKeluarga } from "@/components/FormAdminKeluarga";
 import { IkonFitur } from "@/components/IkonFitur";
 import { formatWaktu, perluAdmin } from "@/lib/admin";
 import { formatTanggal } from "@/lib/data";
@@ -186,6 +187,21 @@ export default async function Halaman({ params }: PageProps<"/admin/keluarga/[id
             </tbody>
           </table>
         )}
+      </section>
+
+      <section aria-labelledby="tindakan-keluarga" className="flex flex-col gap-4 border-t-2 border-line pt-6">
+        <div className="flex flex-col gap-1">
+          <h2 id="tindakan-keluarga" className="text-lg font-semibold text-bahaya">
+            Tindakan penghapusan keluarga
+          </h2>
+          <p className="text-sm text-muted">
+            Admin platform dapat membersihkan data progres atau menghapus keluarga secara permanen jika diperlukan.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormAdminHapusDataKeluarga keluargaId={id} namaKeluarga={d.keluarga.nama} />
+          <FormAdminHapusKeluarga keluargaId={id} namaKeluarga={d.keluarga.nama} />
+        </div>
       </section>
     </div>
   );
